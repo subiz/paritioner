@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"reflect"
 	"hash/fnv"
 	pb "github.com/subiz/header/partitioner"
 	"google.golang.org/grpc"
@@ -31,6 +32,7 @@ type Worker struct {
 	conn map[string]*grpc.ClientConn
 	GlobalConfig  *pb.Configuration // intermediate configuration
 	Version string
+	handlerOutType map[string]reflect.Type
 	Cluster string
 	Term    int32
 	coor    CoordinatorMgr
@@ -56,8 +58,6 @@ type CoordinatorMgr interface {
 	Config() *pb.Configuration
 }
 
-func (w *Worker) Config() *pb.Configuration { return w.coor.Config() }
-
 func (w *Worker) CorrectJob(key string)
 
 func (w *Worker) Run() {
@@ -72,6 +72,33 @@ func (me *Worker) Abort() {
 
 }
 
+func  analysis(server interface{}) map[string]reflect.Type {
+	m := make(map[string]reflect.Type)
+	t := reflect.TypeOf(server).Elem()
+	var s []string
+	for i := 0; i < t.NumMethod(); i++ {
+		methodType := t.Method(i).Type
+		if methodType.NumOut() != 2 || methodType.NumIn() != 2 {
+			continue
+		}
+
+		if methodType.Out(1).Kind() != reflect.Ptr || methodType.Out(1).Name() != "context" {
+			contine
+		}
+
+		if methodType.Out(0).Kind() != reflect.Ptr || methodType.Out(1).Name() != "error" {
+			continue
+		}
+
+		m[t.Method(i).Name] = methodType.Out(0).Elem()
+		//println("d", reflect.New().Interface().(string))
+		//println(t.Method(i).Type.Out(0).Name())
+	}
+	return m
+}
+
+
+
 func (me *Worker) forward(ctx context.Context,	host string, in interface{}, serverinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	out := new(Account)
 	md, _ := metadata.FromIncomingContext(ctx)
@@ -85,6 +112,8 @@ func (me *Worker) forward(ctx context.Context,	host string, in interface{}, serv
 		}
 		me.conn[host] = cc
 	}
+
+	out := me.makeOut(serverinfo.FullMethod)
 
 	var header, trailer metadata.MD
 	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header),  grpc.Trailer(&trailer))
