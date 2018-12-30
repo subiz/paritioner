@@ -1,41 +1,67 @@
 package worker
 
 import (
-	"reflect"
-	"hash/fnv"
+	"context"
+	"fmt"
+	//	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/metadata"
+	"hash/fnv"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
-	MISS=0
-	BLOCKED=-1
-	NORMAL=1
+	BLOCKED = -1
+	NORMAL  = 1
 
 	PartitionKey = "partitionkey"
 )
 
 func hash(s string) uint32 {
-        h := fnv.New32a()
-        h.Write([]byte(s))
-        return h.Sum32()
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+type partition struct {
+	worker_id   string
+	worker_host string
+	state       int // OFF, NORMAL, BLOCKED,
+
+	prepare_worker_id   string
+	prepare_worker_host string
 }
 
 type Worker struct {
 	*sync.Mutex
-	Config *pb.WorkerConfiguration
-	partitions []int
-	partitionLocs []string
-	blocked_partition []bool
+	id     string // worker id
+	config *pb.Configuration
+
+	partitions []partition
+
 	conn map[string]*grpc.ClientConn
-	GlobalConfig  *pb.Configuration // intermediate configuration
-	Version string
-	handlerOutType map[string]reflect.Type
-	Cluster string
-	Term    int32
-	coor    CoordinatorMgr
+
+	version        string
+	handlerOutType map[string]reflect.Type // key is method name (not fullmethod), value is type (not pointer) of return value
+	cluster        string
+	term           int
+	coor           pb.CoordinatorClient
+}
+
+// findConfig lookups worker configuration by worker ID in global configuration
+// return nil if not found
+func findConfig(conf *pb.Configuration, id string) *pb.WorkerConfiguration {
+	for _, w := range conf.GetWorkers() {
+		if w.GetId() == id {
+			return w
+		}
+	}
+	return nil
 }
 
 func dialGrpc(service string) (*grpc.ClientConn, error) {
@@ -54,28 +80,111 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	return grpc.Dial(service, opts...)
 }
 
-type CoordinatorMgr interface {
-	Config() *pb.Configuration
+func (me *Worker) fetchConfig() {
+	var conf *pb.Configuration
+	var err error
+	for {
+		conf, err = me.coor.GetConfig(context.Background(), &pb.Empty{})
+		if err != nil {
+			fmt.Printf("ERR #234FSDOUD OUTDATED %v\n", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
+		if err != nil {
+			fmt.Printf("ERR #234FSDOUD OUTDATED %v\n", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
+
+	me.Lock()
+	me.config = conf
+	me.term = int(conf.GetTerm())
+	me.partitions = make([]partition, conf.GetTotalPartitions())
+	for _, w := range conf.GetWorkers() {
+		for _, p := range w.GetPartitions() {
+			me.partitions[p].worker_id = w.GetId()
+			me.partitions[p].worker_host = w.GetHost()
+			me.partitions[p].prepare_worker_id = ""
+			me.partitions[p].prepare_worker_host = ""
+			me.partitions[p].state = NORMAL
+		}
+	}
+	me.Unlock()
 }
 
-func (w *Worker) CorrectJob(key string)
+func NewWorker(cluster, id, coordinator string) *Worker {
+	me := &Worker{
+		Mutex:          &sync.Mutex{},
+		version:        "1.0.0",
+		cluster:        cluster,
+		conn:           make(map[string]*grpc.ClientConn),
+		handlerOutType: make(map[string]reflect.Type),
+		term:           0,
+	}
 
-func (w *Worker) Run() {
-
+	cconn, err := dialGrpc(coordinator)
+	if err != nil {
+		panic(err)
+	}
+	me.coor = pb.NewCoordinatorClient(cconn)
+	me.fetchConfig()
+	return me
 }
 
-func (me *Worker) Commit() {
+func (me *Worker) validateRequest(version, cluster string, term int) error {
+	if version != me.version {
+		//return errors.New(400, errors.E_invalid_version, "only support version "+me.version)
+	}
 
+	if cluster != me.cluster {
+		//return errors.New(400, errors.E_invalid_cluster, "cluster should be "+me.cluster+" not "+cluster)
+	}
+
+	if term < me.term {
+		//return errors.New(400, errors.E_invalid_term, "term should be %d, not %d", me.term, term)
+	}
+	return nil
 }
 
-func (me *Worker) Abort() {
+func (me *Worker) GetConfig(cluster, version string, term int) (*pb.Configuration, error) {
+	err := me.validateRequest(version, cluster, term)
+	if err != nil {
+		return nil, err
+	}
 
+	return me.config, nil
 }
 
-func  analysis(server interface{}) map[string]reflect.Type {
+func (me *Worker) Prepare(conf *pb.Configuration) error {
+	err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
+	if err != nil {
+		return err
+	}
+
+	me.Lock()
+	for _, w := range conf.GetWorkers() {
+		for _, p := range w.GetPartitions() {
+			me.partitions[p].prepare_worker_id = w.GetId()
+			me.partitions[p].prepare_worker_host = w.GetHost()
+
+			if me.partitions[p].prepare_worker_id != me.partitions[p].worker_id {
+				me.partitions[p].state = BLOCKED
+			}
+		}
+	}
+	me.Unlock()
+
+	go me.fetchConfig()
+	return nil
+}
+
+func analysis(server interface{}) map[string]reflect.Type {
 	m := make(map[string]reflect.Type)
 	t := reflect.TypeOf(server).Elem()
-	var s []string
 	for i := 0; i < t.NumMethod(); i++ {
 		methodType := t.Method(i).Type
 		if methodType.NumOut() != 2 || methodType.NumIn() != 2 {
@@ -83,7 +192,7 @@ func  analysis(server interface{}) map[string]reflect.Type {
 		}
 
 		if methodType.Out(1).Kind() != reflect.Ptr || methodType.Out(1).Name() != "context" {
-			contine
+			continue
 		}
 
 		if methodType.Out(0).Kind() != reflect.Ptr || methodType.Out(1).Name() != "error" {
@@ -97,74 +206,54 @@ func  analysis(server interface{}) map[string]reflect.Type {
 	return m
 }
 
-
-
-func (me *Worker) forward(ctx context.Context,	host string, in interface{}, serverinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	out := new(Account)
+func (me *Worker) forward(ctx context.Context, host string, in interface{}, serverinfo *grpc.UnaryServerInfo) (interface{}, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	outctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	cc := me.conn[host]
 	if cc == nil {
+		var err error
 		cc, err = dialGrpc(host)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		me.conn[host] = cc
 	}
 
-	out := me.makeOut(serverinfo.FullMethod)
+	out := reflect.New(me.handlerOutType[serverinfo.FullMethod]).Interface()
 
 	var header, trailer metadata.MD
-	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header),  grpc.Trailer(&trailer))
+	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
 	grpc.SendHeader(ctx, header)
 	grpc.SetTrailer(ctx, trailer)
 
 	return out, err
 }
 
-func (me *Worker) Intercept(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (ret interface{}, err error) {
+func (me *Worker) Intercept(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	pkey := strings.Join(md[PartitionKey], "")
 
-
-	// busy waiting until we back to normal state
-
 	if pkey == "" {
-		return handler(ctx, req)
-	}
-	par := hash(pkey) % 1000
-	if me.partitions[par]==NORMAL { // correct partition
-		return handler(ctx, req)
+		return handler(ctx, in)
 	}
 
-	if me.partitions[par]==MISS {
-		// lookup correct node
-		return handler(ctx, req)
+	parindex := hash(pkey) % 1000
+	me.Lock()
+	par := me.partitions[parindex]
+	me.Unlock()
+
+	// block
+	for par.state == BLOCKED {
+		time.Sleep(5 * time.Second)
+		me.Lock()
+		par = me.partitions[parindex]
+		me.Unlock()
 	}
 
-
-
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				e, ok := r.(error)
-				if ok {
-					err = errors.Wrap(e, 500, errors.E_unknown)
-				}
-
-				err = errors.New(500, errors.E_unknown, fmt.Sprintf("%v", e))
-			}
-		}()
-		ret, err = handler(ctx, req)
-	}()
-	if err != nil {
-		e, ok := err.(*errors.Error)
-		if !ok {
-			e = errors.Wrap(err, 500, errors.E_unknown)
-		}
-		md := metadata.Pairs(PanicKey, e.Error())
-		grpc.SendHeader(ctx, md)
+	if par.worker_id == me.id { // correct parittion
+		return handler(ctx, in)
 	}
-	return ret, err
+
+	return me.forward(ctx, par.worker_host, in, sinfo)
 }
