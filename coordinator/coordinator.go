@@ -3,9 +3,11 @@ package coordinator
 import (
 	"context"
 	"fmt"
-	"sort"
+	"google.golang.org/grpc/balancer/roundrobin"
 	// "github.com/subiz/errors"
+	"github.com/golang/protobuf/proto"
 	pb "github.com/subiz/header/partitioner"
+	"google.golang.org/grpc"
 	"sync"
 	"time"
 )
@@ -14,20 +16,19 @@ import (
 type Coor struct {
 	*sync.Mutex
 	db      *DB
-	config  *pb.Configuration // intermediate configuration
+	config  *pb.Configuration // intermediate configuration, TODO: this should never benill
 	version string
 	cluster string
-	worker  Worker
-}
 
-type Worker interface {
-	Request(*pb.WorkerConfiguration) bool
+	dialLock *sync.Mutex
+	workers  map[string]pb.WorkerClient
 }
 
 func NewCoordinator(cluster string, db *DB) *Coor {
 	me := &Coor{Mutex: &sync.Mutex{}}
 	me.version = "1.0.0"
 	me.cluster = cluster
+	me.dialLock = &sync.Mutex{}
 	conf, err := me.db.Load()
 	if err != nil {
 		panic(err)
@@ -75,7 +76,8 @@ func (me *Coor) Join(ctx context.Context, join *pb.JoinRequest) (*pb.Configurati
 		w.Host = join.Host
 	}
 
-	me.config.Term = me.config.GetTerm() + 1
+	me.config.Term = me.config.GetNextTerm()
+	me.config.NextTerm = me.config.GetNextTerm() + 1
 
 	if found {
 		if err := me.db.Store(me.config); err != nil {
@@ -85,18 +87,47 @@ func (me *Coor) Join(ctx context.Context, join *pb.JoinRequest) (*pb.Configurati
 	return me.config, nil
 }
 
-func (me *Coor) Change(nodes []string) {
+// make sure all other nodes are died
+// this protocol assume that nodes are all nodes that survived
+func (me *Coor) Change(newWorkers []string) {
 	me.Lock()
 	defer me.Unlock()
 
-	// balance(workers, nodes)
-	newConfigs := me.config.GetWorkers()
+	workerM := make(map[string][]int32)
+	for _, w := range me.config.GetWorkers() {
+		workerM[w.GetId()] = w.GetPartitions()
+	}
+
+	workerM = balance(workerM, newWorkers)
+	newConfig := proto.Clone(me.config).(*pb.Configuration)
+	newConfig.Workers = make([]*pb.WorkerConfiguration, 0)
+
+	for _, w := range newWorkers {
+		host := ""
+		for _, oldW := range me.config.GetWorkers() {
+			if oldW.GetId() == w {
+				host = oldW.GetHost()
+			}
+		}
+
+		wc := &pb.WorkerConfiguration{Id: w, Host: host, Partitions: workerM[w]}
+		newConfig.Workers = append(newConfig.Workers, wc)
+	}
+
+	newConfig.Term = newConfig.NextTerm
+	newConfig.NextTerm++
+
+	me.config.NextTerm++
+	if err := me.db.Store(me.config); err != nil {
+		fmt.Printf("ERR #DB093FDPW db, %v\n", err)
+		return
+	}
 
 	responseC := make(chan bool)
-	for i, _ := range me.config.GetWorkers() {
-		go func(newConfig *pb.WorkerConfiguration) {
-			//responseC <- me.worker.Request(w, newConfig)
-		}(newConfigs[i])
+	for _, wc := range newConfig.Workers {
+		go func(wc *pb.WorkerConfiguration) {
+			responseC <- me.requestWorker(wc.GetHost(), newConfig)
+		}(wc)
 	}
 
 	ticker := time.NewTicker(40 * time.Second)
@@ -124,104 +155,37 @@ func (me *Coor) Change(nodes []string) {
 failed:
 }
 
-type elem struct {
-	id      string
-	pars    []int
-	numPars int
+func dialGrpc(service string) (*grpc.ClientConn, error) {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+	// Enabling WithBlock tells the client to not give up trying to find a server
+	opts = append(opts, grpc.WithBlock())
+	// However, we're still setting a timeout so that if the server takes too long, we still give up
+	opts = append(opts, grpc.WithTimeout(10*time.Second))
+	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
+	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
+	return grpc.Dial(service, opts...)
 }
 
-type byLength []elem
-
-func (s byLength) Len() int      { return len(s) }
-func (s byLength) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s byLength) Less(i, j int) bool {
-	if len(s[i].pars) == len(s[j].pars) {
-		return s[i].id < s[j].id
-	}
-	return len(s[i].pars) > len(s[j].pars)
-}
-
-func isIn(A []string, s string) bool {
-	for _, a := range A {
-		if a == s {
-			return true
+func (me *Coor) requestWorker(host string, p *pb.Configuration) bool {
+	me.dialLock.Lock()
+	w, ok := me.workers[host]
+	if !ok {
+		conn, err := dialGrpc(host)
+		if err != nil {
+			me.dialLock.Unlock()
+			return false
 		}
-	}
-	return false
-}
-func balance(partitions map[string][]int, nodes []string) map[string][]int {
-	if len(nodes) == 0 {
-		return nil
+		w = pb.NewWorkerClient(conn)
+		me.workers[host] = w
+		me.dialLock.Unlock()
 	}
 
-	elems := make([]elem, len(partitions))
-	i := 0
-	for id, pars := range partitions {
-		elems[i] = elem{id: id, pars: pars}
-		i++
+	_, err := w.Request(context.Background(), p)
+	if err != nil {
+		fmt.Printf("ERR #DJKWPK85JD, grpc err %v\n", err)
+		return false
 	}
 
-	for _, n := range nodes {
-		found := false
-		for _, e := range elems {
-			if e.id == n {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			elems = append(elems, elem{id:n})
-		}
-	}
-
-	sort.Sort(byLength(elems))
-
-	// count total of partition
-	totalPars := 0
-	for _, pars := range partitions {
-		totalPars += len(pars)
-	}
-
-	mod := totalPars % len(nodes)
-	numWorkerPars := totalPars / len(nodes)
-	i = 0
-	for k, e := range elems {
-		if !isIn(nodes, e.id) {
-			continue
-		}
-		e.numPars = numWorkerPars
-		if i < mod {
-			e.numPars++
-		}
-		i++
-		elems[k] = e
-	}
-
-	redurantPars := make([]int, 0)
-	for k, e := range elems {
-		if len(e.pars) > e.numPars { // have redurant job
-			redurantPars = append(redurantPars, e.pars[e.numPars:]...)
-			e.pars = e.pars[:e.numPars]
-			elems[k] = e
-		}
-	}
-
-	for k, e := range elems {
-		if len(e.pars) < e.numPars { // have redurant job
-			lenepars := len(e.pars)
-			e.pars = append(e.pars, redurantPars[:e.numPars-lenepars]...)
-
-			redurantPars = redurantPars[e.numPars-lenepars:]
-			elems[k] = e
-		}
-	}
-
-	partitions = make(map[string][]int)
-	for _, e := range elems {
-		if len(e.pars) > 0 {
-			partitions[e.id] = e.pars
-		}
-	}
-	return partitions
+	return true
 }

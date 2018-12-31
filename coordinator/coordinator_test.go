@@ -1,27 +1,29 @@
 package coordinator
 
 import (
-	"sort"
 	"testing"
 )
 
-func compareIntArr(a1, a2 []int) bool {
+func compareIntArr(a1, a2 []int32) bool {
 	if len(a1) != len(a2) {
 		return false
 	}
 
-	sort.Ints(a1)
-	sort.Ints(a2)
+	m := make(map[int32]bool, len(a1))
 
 	for i := range a1 {
-		if a1[i] != a2[i] {
+		m[i] = true
+	}
+
+	for i := range a2 {
+		if _, ok := m[i]; !ok {
 			return false
 		}
 	}
 	return true
 }
 
-func compareM(c1, c2 map[string][]int) bool {
+func compareM(c1, c2 map[string][]int32) bool {
 	if len(c1) != len(c2) {
 		return false
 	}
@@ -42,79 +44,79 @@ func compareM(c1, c2 map[string][]int) bool {
 func TestBalance(t *testing.T) {
 	tcs := []struct {
 		desc     string
-		config   map[string][]int
+		config   map[string][]int32
 		nodes    []string
-		expected map[string][]int
+		expected map[string][]int32
 	}{{
 		desc: "test 1, remove node",
-		config: map[string][]int{
-			"1": []int{1, 2},
-			"2": []int{3, 4},
-			"3": []int{5, 6},
-			"4": []int{7, 8},
+		config: map[string][]int32{
+			"1": []int32{1, 2},
+			"2": []int32{3, 4},
+			"3": []int32{5, 6},
+			"4": []int32{7, 8},
 		},
 		nodes: []string{"1", "2", "3"},
-		expected: map[string][]int{
-			"1": []int{1, 2, 7},
-			"2": []int{3, 4, 8},
-			"3": []int{5, 6},
+		expected: map[string][]int32{
+			"1": []int32{1, 2, 7},
+			"2": []int32{3, 4, 8},
+			"3": []int32{5, 6},
 		},
 	}, {
 		desc: "test 2, add node",
-		config: map[string][]int{
-			"1": []int{1, 2},
-			"2": []int{3, 4},
-			"3": []int{5, 6},
-			"4": []int{7, 8},
+		config: map[string][]int32{
+			"1": []int32{1, 2},
+			"2": []int32{3, 4},
+			"3": []int32{5, 6},
+			"4": []int32{7, 8},
 		},
 		nodes: []string{"1", "2", "3", "4", "5"},
-		expected: map[string][]int{
-			"1": []int{1, 2},
-			"2": []int{3, 4},
-			"3": []int{5, 6},
-			"4": []int{7},
-			"5": []int{8},
+		expected: map[string][]int32{
+			"1": []int32{1, 2},
+			"2": []int32{3, 4},
+			"3": []int32{5, 6},
+			"4": []int32{7},
+			"5": []int32{8},
 		},
 	}, {
 		desc: "test 4, no change in cluster, just rebalance",
-		config: map[string][]int{
-			"1": []int{1, 2},
-			"2": []int{3, 4},
-			"3": []int{5, 6},
-			"4": []int{},
+		config: map[string][]int32{
+			"1": []int32{1, 2},
+			"2": []int32{3, 4},
+			"3": []int32{5, 6},
+			"4": []int32{},
 		},
 		nodes: []string{"1", "2", "3", "4"},
-		expected: map[string][]int{
-			"1": []int{1, 2},
-			"2": []int{3, 4},
-			"3": []int{5},
-			"4": []int{6},
+		expected: map[string][]int32{
+			"1": []int32{1, 2},
+			"2": []int32{3, 4},
+			"3": []int32{5},
+			"4": []int32{6},
 		},
 	}, {
 		desc: "unbalanced remove node",
-		config: map[string][]int{
-			"1": []int{1, 2, 3, 4, 5, 9},
-			"2": []int{6},
-			"3": []int{7, 8},
-			"4": []int{},
+		config: map[string][]int32{
+			"1": []int32{1, 2, 3, 4, 5, 9},
+			"2": []int32{6},
+			"3": []int32{7, 8},
+			"4": []int32{},
 		},
 		nodes: []string{"1", "3", "4"},
-		expected: map[string][]int{
-			"1": []int{1, 2, 3},
-			"3": []int{7, 8, 4},
-			"4": []int{5, 9, 6},
+		expected: map[string][]int32{
+			"1": []int32{1, 2, 3},
+			"3": []int32{7, 8, 4},
+			"4": []int32{5, 9, 6},
 		},
 	}, {
 		desc: "unbalanced add node",
-		config: map[string][]int{
-			"1": []int{1, 2, 3, 4, 5, 6, 9},
-			"3": []int{7, 8},
+		config: map[string][]int32{
+			"1": []int32{1, 2, 3, 4, 5, 6, 9},
+			"3": []int32{7, 8},
 		},
 		nodes: []string{"1", "2", "3"},
-		expected: map[string][]int{
-			"1": []int{1, 2, 3},
-			"2": []int{9, 5, 6},
-			"3": []int{7, 8, 4},
+		expected: map[string][]int32{
+			"1": []int32{1, 2, 3},
+			"2": []int32{9, 5, 6},
+			"3": []int32{7, 8, 4},
 		},
 	}}
 
