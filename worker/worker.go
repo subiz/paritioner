@@ -94,7 +94,7 @@ func (me *Worker) fetchConfig() {
 	me.Unlock()
 }
 
-func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string) *Worker {
+func NewWorker(host string, cluster, id, coordinator string) *Worker {
 	me := &Worker{
 		Mutex:   &sync.Mutex{},
 		version: "1.0.0",
@@ -123,9 +123,11 @@ func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string
 	}
 
 	me.fetchConfig()
-
-	pb.RegisterWorkerServer(server, me)
 	return me
+}
+
+func (me *Worker) RegistryServer(server *grpc.Server) {
+	pb.RegisterWorkerServer(server, me)
 }
 
 func (me *Worker) validateRequest(version, cluster string, term int) error {
@@ -199,24 +201,8 @@ func analysis(server interface{}) map[string]reflect.Type {
 	return m
 }
 
-// key is method name (not fullmethod), value is type (not pointer) of return value
-func (me *Worker) forward(cc *grpc.ClientConn, outType map[string]reflect.Type, ctx context.Context, in interface{}, serverinfo *grpc.UnaryServerInfo) (interface{}, error) {
-	md, _ := metadata.FromIncomingContext(ctx)
-	outctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	out := reflect.New(outType[serverinfo.FullMethod]).Interface()
-
-	var header, trailer metadata.MD
-	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
-	grpc.SendHeader(ctx, header)
-	grpc.SetTrailer(ctx, trailer)
-
-	return out, err
-}
-
-type interceptor func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error)
-
-func (me *Worker) CreateIntercept(mgr interface{}) interceptor {
+func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 	outTypeM := analysis(mgr)
 	conn := &sync.Map{}
 	dialMutex := &sync.Mutex{}
@@ -257,6 +243,21 @@ func (me *Worker) CreateIntercept(mgr interface{}) interceptor {
 			conn.Store(par.worker_host, cci)
 			dialMutex.Unlock()
 		}
-		return me.forward(cci.(*grpc.ClientConn), outTypeM, ctx, in, sinfo)
+		return forward(cci.(*grpc.ClientConn), outTypeM, ctx, in, sinfo)
 	}
+}
+
+// key is method name (not fullmethod), value is type (not pointer) of return value
+func forward(cc *grpc.ClientConn, outType map[string]reflect.Type, ctx context.Context, in interface{}, serverinfo *grpc.UnaryServerInfo) (interface{}, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	outctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	out := reflect.New(outType[serverinfo.FullMethod]).Interface()
+
+	var header, trailer metadata.MD
+	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
+	grpc.SendHeader(ctx, header)
+	grpc.SetTrailer(ctx, trailer)
+
+	return out, err
 }
