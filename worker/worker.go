@@ -126,10 +126,6 @@ func NewWorker(host string, cluster, id, coordinator string) *Worker {
 	return me
 }
 
-func (me *Worker) RegistryServer(server *grpc.Server) {
-	pb.RegisterWorkerServer(server, me)
-}
-
 func (me *Worker) validateRequest(version, cluster string, term int) error {
 	if version != me.version {
 		return errors.New(400, errors.E_invalid_partition_version, "only support version "+me.version)
@@ -182,7 +178,8 @@ func analysis(server interface{}) map[string]reflect.Type {
 	t := reflect.TypeOf(server).Elem()
 	for i := 0; i < t.NumMethod(); i++ {
 		methodType := t.Method(i).Type
-		if methodType.NumOut() != 2 || methodType.NumIn() != 2 {
+		if methodType.NumOut() != 2 || methodType.NumIn() < 2 {
+			println("skip dd", t.Method(i).Name)
 			continue
 		}
 
