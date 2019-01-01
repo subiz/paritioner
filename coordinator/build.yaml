@@ -1,0 +1,9 @@
+version: 1
+steps:
+- image: gcr.io/cloud-builders/go
+  dir: /root/go/src/github.com/subiz/partitioner/coordinator
+  volumes:
+  - $(pwd):/root/go/src/github.com/subiz/partitioner/coordinator
+  command: |
+    GOCACHE=/root/go/src/github.com/subiz/partitioner/coordinator/.cache CGO_ENABLED=0 go build -ldflags="-s -w" -o coordinator || exit 1
+    tar -czf coordinator.tar.gz coordinator

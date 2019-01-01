@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: coordinator
+spec:
+  ports:
+  - port: 8021
+    targetPort: 8021
+  clusterIP: None
+  selector:
+    app: coordinator
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: coordinator
+  labels:
+    app: coordinator
+    type: ms
+spec:
+  replicas: 1 # must be 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: coordinator
+  template:
+    metadata:
+      labels:
+        app: coordinator
+        type: ms
+        environment: production
+      annotations:
+        prometheus.io/port: '4123'
+        prometheus.io/scrape: 'true'
+    spec:
+      nodeSelector:
+        tier: app
+      containers:
+      - name: coordinator
+        image: $IMG
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80

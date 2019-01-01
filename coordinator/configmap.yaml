@@ -1,0 +1,3 @@
+COOR_CASSANDRASEEDS: cassandra.seeds
+COOR_PORT: coordinator.port
+COOR_SERVICES: coordinator.services

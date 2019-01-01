@@ -1,0 +1,9 @@
+#!/bin/sh
+
+export _NAME=coordinator
+export _ENV=dev
+export _ORG=subiz
+export _DOCKERHOST=
+
+export DOCKER_BUILD_HOST=tcp://dev.subiz.net:2376
+up4
