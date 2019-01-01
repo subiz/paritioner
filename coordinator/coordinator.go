@@ -1,13 +1,9 @@
 package coordinator
 
 import (
-	"context"
-	"fmt"
-	"google.golang.org/grpc/balancer/roundrobin"
-	// "github.com/subiz/errors"
 	"github.com/golang/protobuf/proto"
+	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
-	"google.golang.org/grpc"
 	"sync"
 	"time"
 )
@@ -15,177 +11,114 @@ import (
 // Coor is a coordinator implementation
 type Coor struct {
 	*sync.Mutex
-	db      *DB
-	config  *pb.Configuration // intermediate configuration, TODO: this should never benill
-	version string
-	cluster string
-
-	dialLock *sync.Mutex
-	workers  map[string]pb.WorkerClient
+	db         *DB
+	config     *pb.Configuration // intermediate configuration, TODO: this never be nil
+	workerComm WorkerComm
 }
 
-func NewCoordinator(cluster string, db *DB) *Coor {
+// Workers communator, used to send signal (message) to workers
+type WorkerComm interface {
+	Prepare(id string, conf *pb.Configuration) error
+}
+
+func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	me := &Coor{Mutex: &sync.Mutex{}}
-	me.version = "1.0.0"
-	me.cluster = cluster
-	me.dialLock = &sync.Mutex{}
+	// me.config.version = "1.0.0"
+	me.workerComm = workerComm
+	// me.cluster = cluster
 	conf, err := me.db.Load()
 	if err != nil {
 		panic(err)
 	}
-	me.config = conf
+
+	// init config
+	if conf == nil {
+		me.config = &pb.Configuration{
+			Version:         "1.0.0",
+			Cluster:         cluster,
+			Term:            0,
+			NextTerm:        1,
+			TotalPartitions: 1024,
+		}
+		if err := me.db.Store(me.config); err != nil {
+			panic(err)
+		}
+	}
 	return me
 }
 
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
-	if version != me.version {
-		//return errors.New(400, errors.E_invalid_version, "only support version "+me.Version)
+	if version != me.config.Version {
+		return errors.New(400, errors.E_invalid_partition_version, "only support version "+me.config.Version)
 	}
 
-	if cluster != me.cluster {
-		//return errors.New(400, errors.E_invalid_cluster, "cluster should be "+me.Cluster+" not "+cluster)
+	if cluster != me.config.Cluster {
+		return errors.New(400, errors.E_invalid_partition_cluster, "cluster should be "+me.config.Cluster+" not "+cluster)
 	}
 
-	if term < me.config.GetTerm() {
-		//return errors.New(400, errors.E_invalid_term, "term should be %d, not %d", me.Term, term)
+	if term < me.config.Term {
+		return errors.New(400, errors.E_invalid_partition_term, "term should be %d, not %d", me.config.Term, term)
 	}
 	return nil
 }
 
-func (me *Coor) GetConfig(ctx context.Context, em *pb.Empty) (*pb.Configuration, error) {
+func (me *Coor) GetConfig() *pb.Configuration {
 	me.Lock()
 	defer me.Unlock()
-	return me.config, nil
-}
-
-func (me *Coor) Join(ctx context.Context, join *pb.JoinRequest) (*pb.Configuration, error) {
-	me.Lock()
-	defer me.Unlock()
-
-	err := me.validateRequest(join.GetVersion(), join.GetCluster(), join.GetTerm())
-	if err != nil {
-		return nil, err
-	}
-
-	found := false
-	for _, w := range me.config.GetWorkers() {
-		if w.Id != join.GetId() {
-			continue
-		}
-		found = true
-		w.Host = join.Host
-	}
-
-	me.config.Term = me.config.GetNextTerm()
-	me.config.NextTerm = me.config.GetNextTerm() + 1
-
-	if found {
-		if err := me.db.Store(me.config); err != nil {
-			return nil, err
-		}
-	}
-	return me.config, nil
+	return me.config
 }
 
 // make sure all other nodes are died
 // this protocol assume that nodes are all nodes that survived
-func (me *Coor) Change(newWorkers []string) {
+func (me *Coor) ChangeWorkers(newWorkers []string) error {
 	me.Lock()
 	defer me.Unlock()
 
-	workerM := make(map[string][]int32)
-	for _, w := range me.config.GetWorkers() {
-		workerM[w.GetId()] = w.GetPartitions()
+	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
+	partitionM := make(map[string][]int32)
+	for _, w := range me.config.GetPartitions() {
+		partitionM[w.GetId()] = w.GetPartitions()
+	}
+	partitionM = balance(partitionM, newWorkers)
+	newPars := make(map[string]*pb.WorkerPartitions)
+	for id, pars := range partitionM {
+		newPars[id] = &pb.WorkerPartitions{Partitions: pars}
 	}
 
-	workerM = balance(workerM, newWorkers)
 	newConfig := proto.Clone(me.config).(*pb.Configuration)
-	newConfig.Workers = make([]*pb.WorkerConfiguration, 0)
-
-	for _, w := range newWorkers {
-		host := ""
-		for _, oldW := range me.config.GetWorkers() {
-			if oldW.GetId() == w {
-				host = oldW.GetHost()
-			}
-		}
-
-		wc := &pb.WorkerConfiguration{Id: w, Host: host, Partitions: workerM[w]}
-		newConfig.Workers = append(newConfig.Workers, wc)
-	}
-
 	newConfig.Term = newConfig.NextTerm
 	newConfig.NextTerm++
+	newConfig.Partitions = newPars
+	// newConfig.Hosts = newHosts
 
+	// save next term to database
 	me.config.NextTerm++
 	if err := me.db.Store(me.config); err != nil {
-		fmt.Printf("ERR #DB093FDPW db, %v\n", err)
-		return
+		return err
 	}
 
-	responseC := make(chan bool)
-	for _, wc := range newConfig.Workers {
-		go func(wc *pb.WorkerConfiguration) {
-			responseC <- me.requestWorker(wc.GetHost(), newConfig)
-		}(wc)
+	responseC := make(chan error)
+	for _, id := range newWorkers {
+		go func(id string) {
+			responseC <- me.workerComm.Prepare(id, newConfig)
+		}(id)
 	}
 
 	ticker := time.NewTicker(40 * time.Second)
-
-	total := 0
+	numVotes := 0
 	for {
 		select {
-		case res := <-responseC:
-			if !res {
-				goto failed
+		case err := <-responseC:
+			if err != nil {
+				return errors.Wrap(err, 500, errors.E_error_from_partition_peer)
 			}
-
-			total++
-			if total == len(me.config.GetWorkers()) {
-				// success
-				//me.config = newConfigs
-				return
+			numVotes++
+			if numVotes == len(newWorkers) { // successed
+				me.config = newConfig
+				return nil
 			}
 		case <-ticker.C:
-			fmt.Printf("TIMEOUT, got only %d respones", total)
-			goto failed
+			return errors.New(500, errors.E_partition_transaction_timeout)
 		}
 	}
-
-failed:
-}
-
-func dialGrpc(service string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	// Enabling WithBlock tells the client to not give up trying to find a server
-	opts = append(opts, grpc.WithBlock())
-	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(10*time.Second))
-	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
-	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
-	return grpc.Dial(service, opts...)
-}
-
-func (me *Coor) requestWorker(host string, p *pb.Configuration) bool {
-	me.dialLock.Lock()
-	w, ok := me.workers[host]
-	if !ok {
-		conn, err := dialGrpc(host)
-		if err != nil {
-			me.dialLock.Unlock()
-			return false
-		}
-		w = pb.NewWorkerClient(conn)
-		me.workers[host] = w
-		me.dialLock.Unlock()
-	}
-
-	_, err := w.Request(context.Background(), p)
-	if err != nil {
-		fmt.Printf("ERR #DJKWPK85JD, grpc err %v\n", err)
-		return false
-	}
-
-	return true
 }
