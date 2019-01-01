@@ -26,12 +26,12 @@
 
 
 [[constraint]]
-  name = "github.com/golang/protobuf"
-  version = "1.2.0"
+  branch = "master"
+  name = "github.com/gocql/gocql"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/subiz/cassandra"
+  name = "github.com/golang/protobuf"
+  version = "1.2.0"
 
 [[constraint]]
   branch = "master"
@@ -39,7 +39,15 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/subiz/goutils"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/subiz/header"
+
+[[constraint]]
+  name = "google.golang.org/grpc"
+  version = "1.17.0"
 
 [prune]
   go-tests = true
