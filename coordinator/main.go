@@ -7,6 +7,7 @@ import (
 	pb "github.com/subiz/header/partitioner"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
+	"github.com/subiz/errors"
 	"net"
 )
 
@@ -58,10 +59,20 @@ func daemon(ctx *cli.Context) error {
 }
 
 func (me *BigServer) Join(ctx context.Context, host *pb.WorkerHost) (*pb.Empty, error) {
-	err := me.serverMap[host.GetCluster()].Join(host.GetId(), host.GetHost())
+	fmt.Println("got join cluster", host.GetCluster())
+	server := me.serverMap[host.GetCluster()]
+	if server== nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", host.GetCluster())
+	}
+	err := server.Join(host.GetId(), host.GetHost())
 	return &pb.Empty{}, err
 }
 
 func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
-	return me.serverMap[cluster.GetId()].GetConfig(), nil
+	server := me.serverMap[cluster.GetId()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", cluster.GetId())
+	}
+	config := server.GetConfig()
+	return config, nil
 }
