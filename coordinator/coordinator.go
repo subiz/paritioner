@@ -1,4 +1,4 @@
-package coordinator
+package main
 
 import (
 	"github.com/golang/protobuf/proto"
@@ -26,7 +26,7 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	// me.config.version = "1.0.0"
 	me.workerComm = workerComm
 	// me.cluster = cluster
-	conf, err := me.db.Load()
+	conf, err := me.db.Load(cluster)
 	if err != nil {
 		panic(err)
 	}

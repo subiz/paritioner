@@ -1,4 +1,4 @@
-package coordinator
+package main
 
 import (
 	"fmt"
@@ -32,9 +32,6 @@ const (
 type DB struct {
 	// hold connection to the database
 	session *gocql.Session
-
-	// ID of cluster
-	cluster string
 }
 
 // connect creates new session to cassandra database, this function auto
@@ -59,7 +56,7 @@ func connect(seeds []string, keyspace string) *gocql.Session {
 //     connect to the cluster then the rest of the ring will be automatically
 //     discovered.
 //   cluster: used to identify the cluster
-func NewDB(seeds []string, cluster string) *DB {
+func NewDB(seeds []string) *DB {
 	me := &DB{}
 	me.session = connect(seeds, keyspace)
 	return me
@@ -73,7 +70,7 @@ func (me *DB) Store(conf *pb.Configuration) error {
 	}
 
 	err = me.session.Query("INSERT INTO "+tblConf+"(cluster, conf) VALUES(?,?)",
-		me.cluster, confb).Exec()
+		conf.GetCluster(), confb).Exec()
 	if err != nil {
 		return errors.Wrap(err, 500, errors.E_database_error)
 	}
@@ -82,10 +79,10 @@ func (me *DB) Store(conf *pb.Configuration) error {
 
 // Load lookups configuration for cluster in the database
 // if not found, it returns empty configuration with no error
-func (me *DB) Load() (*pb.Configuration, error) {
+func (me *DB) Load(cluster string) (*pb.Configuration, error) {
 	confb := make([]byte, 0)
 	err := me.session.Query("SELECT conf FROM "+tblConf+" WHERE cluster=?",
-		me.cluster).Scan(&confb)
+		cluster).Scan(&confb)
 	if err != nil && err.Error() == gocql.ErrNotFound.Error() {
 		return &pb.Configuration{}, nil
 	}
@@ -103,9 +100,9 @@ func (me *DB) Load() (*pb.Configuration, error) {
 
 // SaveHost persists pair <worker ID and worker host> to the database.
 // After this, user can use LoadHosts to lookup host
-func (me *DB) SaveHost(id, host string) error {
+func (me *DB) SaveHost(cluster, id, host string) error {
 	err := me.session.Query("INSERT INTO "+tblHost+"(cluster, id, host) VALUES(?,?,?)",
-		me.cluster, id, host).Exec()
+		cluster, id, host).Exec()
 	if err != nil {
 		return errors.Wrap(err, 500, errors.E_database_error)
 	}
@@ -113,9 +110,9 @@ func (me *DB) SaveHost(id, host string) error {
 }
 
 // RemoveHost deletes worker's host by it's ID
-func (me *DB) RemoveHost(id string) error {
+func (me *DB) RemoveHost(cluster, id string) error {
 	err := me.session.Query("DELETE FROM "+tblHost+" WHERE cluster=? AND id=?",
-		me.cluster, id).Exec()
+		cluster, id).Exec()
 	if err != nil {
 		return errors.Wrap(err, 500, errors.E_database_error)
 	}
@@ -123,16 +120,16 @@ func (me *DB) RemoveHost(id string) error {
 }
 
 // LoadHosts lookups all worker hosts and IDs by cluster name
-func (me *DB) LoadHosts() (map[string]string, error) {
+func (me *DB) LoadHosts(cluster string) (map[string]string, error) {
 	hosts := make(map[string]string)
 	iter := me.session.Query("SELECT id,host FROM "+tblHost+" WHERE cluster=?",
-		me.cluster).Iter()
+		cluster).Iter()
 	id, host := "", ""
 	for iter.Scan(&id, &host) {
 		hosts[id] = host
 	}
 	if err := iter.Close(); err != nil {
-		return nil, errors.Wrap(err, 500, errors.E_database_error, me.cluster, id)
+		return nil, errors.Wrap(err, 500, errors.E_database_error, cluster, id)
 	}
 	return hosts, nil
 }

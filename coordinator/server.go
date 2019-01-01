@@ -1,4 +1,4 @@
-package coordinator
+package main
 
 import (
 	"context"
@@ -24,28 +24,20 @@ type Server struct {
 	cluster     string
 }
 
-func RunServe(cluster, kubeservice string, cassandraSeeds []string, port string) error {
-	me := &Server{Mutex: &sync.Mutex{}}
-	me.kubeservice = kubeservice
-	me.cluster = cluster
-	me.dialLock = &sync.Mutex{}
-	me.db = NewDB(cassandraSeeds, cluster)
-	me.coor = NewCoordinator(cluster, me.db, me)
+func NewServer(kubeservice string, db *DB) *Server {
+	s := &Server{Mutex: &sync.Mutex{}}
+	s.kubeservice = kubeservice
+	s.cluster = kubeservice
+	s.dialLock = &sync.Mutex{}
+	s.db = db
+	s.coor = NewCoordinator(kubeservice, db, s)
 	var err error
-	me.hosts, err = me.db.LoadHosts()
+	s.hosts, err = db.LoadHosts(kubeservice)
 	if err != nil {
-		return err
+		panic(err)
 	}
-
-	grpcServer := grpc.NewServer()
-	pb.RegisterCoordinatorServer(grpcServer, me)
-
-	lis, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		return err
-	}
-
-	return grpcServer.Serve(lis)
+	go s.lookupDNS()
+	return s
 }
 
 func (me *Server) lookupDNS() {
@@ -79,16 +71,18 @@ func (me *Server) lookupDNS() {
 	}
 }
 
-func (me *Server) Join(ctx context.Context, host *pb.WorkerHost) (*pb.Empty, error) {
+func (me *Server) Join(id, host string) error {
 	me.Lock()
 	defer me.Unlock()
 
-	if err := me.db.SaveHost(host.GetId(), host.GetHost()); err != nil {
-		return nil, err
+	if err := me.db.SaveHost(me.cluster, id, host); err != nil {
+		return err
 	}
-	me.hosts[host.GetId()] = host.GetHost()
-	return &pb.Empty{}, nil
+	me.hosts[id] = host
+	return nil
 }
+
+func (me *Server) GetConfig() *pb.Configuration { return me.coor.GetConfig() }
 
 func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
 	host, ok := me.hosts[workerid]
@@ -135,8 +129,4 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
 	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
 	return grpc.Dial(service, opts...)
-}
-
-func (me *Server) GetConfig(ctx context.Context, em *pb.Empty) (*pb.Configuration, error) {
-	return me.coor.GetConfig(), nil
 }
