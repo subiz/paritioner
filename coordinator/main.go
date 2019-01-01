@@ -64,6 +64,12 @@ func (me *BigServer) Join(ctx context.Context, host *pb.WorkerHost) (*pb.Empty, 
 	if server== nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", host.GetCluster())
 	}
+	if host.GetHost() == "" {
+		return nil, errors.New(400, errors.E_unknown, "empty host")
+	}
+	if host.GetId() == "" {
+		return nil, errors.New(400, errors.E_unknown, "empty id")
+	}
 	err := server.Join(host.GetId(), host.GetHost())
 	return &pb.Empty{}, err
 }
@@ -73,6 +79,5 @@ func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Co
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", cluster.GetId())
 	}
-	config := server.GetConfig()
-	return config, nil
+	return server.GetConfig(), nil
 }

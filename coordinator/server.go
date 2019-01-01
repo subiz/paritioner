@@ -82,7 +82,19 @@ func (me *Server) Join(id, host string) error {
 	return nil
 }
 
-func (me *Server) GetConfig() *pb.Configuration { return me.coor.GetConfig() }
+func (me *Server) GetConfig() *pb.Configuration {
+	conf := me.coor.GetConfig()
+
+	// refill hosts info since coor only store worker ids
+	hosts := make(map[string]string)
+	me.Lock()
+	for workerid, _ := range conf.GetPartitions() {
+		hosts[workerid] = me.hosts[workerid]
+	}
+	me.Unlock()
+	conf.Hosts = hosts
+	return conf
+}
 
 func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
 	host, ok := me.hosts[workerid]
