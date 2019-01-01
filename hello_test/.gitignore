@@ -1,3 +1,4 @@
 /vendor
-hello_test
-hello_test.tar.gz
+/hellotest
+/hellotest.tar.gz
+/.cache

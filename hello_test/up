@@ -1,6 +1,6 @@
 #!/bin/sh
 
-export _NAME=hello_test
+export _NAME=hellotest
 export _ENV=dev
 export _ORG=subiz
 export _DOCKERHOST=

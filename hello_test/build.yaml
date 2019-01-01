@@ -1,9 +1,9 @@
 version: 1
 steps:
 - image: gcr.io/cloud-builders/go
-  dir: /root/go/src/github.com/subiz/partitioner/hello_test
+  dir: /root/go/src/github.com/subiz/partitioner/hellotest
   volumes:
-  - $(pwd):/root/go/src/github.com/subiz/partitioner/hello_test
+  - $(pwd):/root/go/src/github.com/subiz/partitioner/hellotest
   command: |
-    GOCACHE=/root/go/src/github.com/subiz/partitioner/hello_test/.cache CGO_ENABLED=0 go build -ldflags="-s -w" -o hello_test || exit 1
-    tar -czf hello_test.tar.gz hello_test
+    GOCACHE=/root/go/src/github.com/subiz/partitioner/hellotest/.cache CGO_ENABLED=0 go build -ldflags="-s -w" -o hellotest || exit 1
+    tar -czf hellotest.tar.gz hellotest
