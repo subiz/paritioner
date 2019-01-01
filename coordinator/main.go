@@ -16,8 +16,6 @@ type BigServer struct {
 
 type Config struct {
 	CassandraSeeds []string `required:"true"`
-	KeyspacePrefix string   `required:"true"`
-	ReplicaFactor  int      `required:"true"`
 	Port           string   `required:"true"`
 	Services       []string `required:"true"`
 }

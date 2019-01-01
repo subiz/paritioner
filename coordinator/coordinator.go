@@ -23,9 +23,8 @@ type WorkerComm interface {
 
 func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	me := &Coor{Mutex: &sync.Mutex{}}
-	// me.config.version = "1.0.0"
 	me.workerComm = workerComm
-	// me.cluster = cluster
+	me.db = db
 	conf, err := me.db.Load(cluster)
 	if err != nil {
 		panic(err)

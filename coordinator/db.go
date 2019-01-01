@@ -28,7 +28,7 @@ const (
 //   };
 //
 //   CREATE TABLE partitioner.conf(cluster TEXT,conf BLOB,PRIMARY KEY(cluster));
-//   CREATE TABLE partitioner.host(cluster TEXT,id ASCII, host ASCII, PRIMAY KEY(cluster, id));
+//   CREATE TABLE partitioner.host(cluster TEXT,id ASCII, host ASCII, PRIMARY KEY(cluster, id));
 type DB struct {
 	// hold connection to the database
 	session *gocql.Session
