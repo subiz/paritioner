@@ -3,7 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
-	//	"github.com/subiz/errors"
+	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -117,15 +117,15 @@ func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string
 
 func (me *Worker) validateRequest(version, cluster string, term int) error {
 	if version != me.version {
-		//return errors.New(400, errors.E_invalid_version, "only support version "+me.version)
+		return errors.New(400, errors.E_invalid_partition_version, "only support version "+me.version)
 	}
 
 	if cluster != me.cluster {
-		//return errors.New(400, errors.E_invalid_cluster, "cluster should be "+me.cluster+" not "+cluster)
+		return errors.New(400, errors.E_invalid_partition_cluster, "cluster should be "+me.cluster+" not "+cluster)
 	}
 
 	if term < me.term {
-		//return errors.New(400, errors.E_invalid_term, "term should be %d, not %d", me.term, term)
+		return errors.New(400, errors.E_invalid_partition_term, "term should be %d, not %d", me.term, term)
 	}
 	return nil
 }
