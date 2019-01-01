@@ -47,11 +47,22 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:eb41484b8ecbb15cd6d154f7a6f810bb3298b8abd3bf1e12d23b58056526a8f0"
+  digest = "1:dcb393936523201e9a47f4514ca480fd5f671e1c98459c61a010c53bf9007305"
   name = "github.com/subiz/partitioner"
-  packages = ["worker"]
+  packages = [
+    "client",
+    "worker",
+  ]
   pruneopts = "UT"
-  revision = "05877b80d1a98c5f3a9441a6434cde51cbd51bef"
+  revision = "8eb08a1989e3d620e8a7a6e4f5b800db58143c8a"
+
+[[projects]]
+  digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
 
 [[projects]]
   branch = "master"
@@ -155,7 +166,9 @@
   analyzer-version = 1
   input-imports = [
     "github.com/subiz/header/partitioner",
+    "github.com/subiz/partitioner/client",
     "github.com/subiz/partitioner/worker",
+    "github.com/urfave/cli",
     "google.golang.org/grpc",
     "google.golang.org/grpc/reflection",
   ]
