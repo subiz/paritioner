@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	pb "github.com/subiz/header/partitioner"
+	"github.com/subiz/partitioner/client"
 	"github.com/subiz/partitioner/worker"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
@@ -11,6 +12,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 const (
@@ -23,7 +25,11 @@ type server struct{}
 // Hello implements partitioner.HelloServer
 func (s *server) Hello(ctx context.Context, in *pb.String) (*pb.String, error) {
 	log.Printf("Received: %v", in.Str)
-	return &pb.String{Str: "Hello " + in.Str}, nil
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.String{Str: "Hello " + in.Str + "from" + hostname}, nil
 }
 
 func main() {
@@ -66,28 +72,22 @@ func runServer(ctx *cli.Context) {
 }
 
 func runClient(ctx *cli.Context) {
-	conn, err := dialGrpc("localhost:50051")
+
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithBlock())
+	opts = append(opts, grpc.WithTimeout(10*time.Second))
+	opts = append(opts, client.NewClient("localhost:50051").WithInterceptor())
+	conn, err := grpc.Dial("localhost:50051", opts...)
 	if err != nil {
 		panic(err)
 	}
 
-	client := pb.NewHelloClient(conn)
-	s, err := client.Hello(context.Background(), &pb.String{Str: "haivan"})
+	c := pb.NewHelloClient(conn)
+	s, err := c.Hello(context.Background(), &pb.String{Str: "haivan"})
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("ret", s.Str)
-}
-
-func dialGrpc(service string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	// Enabling WithBlock tells the client to not give up trying to find a server
-	opts = append(opts, grpc.WithBlock())
-	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(10*time.Second))
-	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
-	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
-	return grpc.Dial(service, opts...)
 }
