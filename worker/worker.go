@@ -44,6 +44,7 @@ type Worker struct {
 	cluster    string
 	term       int
 	coor       pb.CoordinatorClient
+	host       string
 }
 
 func dialGrpc(service string) (*grpc.ClientConn, error) {
@@ -54,7 +55,6 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	// However, we're still setting a timeout so that if the server takes too long, we still give up
 	opts = append(opts, grpc.WithTimeout(10*time.Second))
 	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
-	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
 	return grpc.Dial(service, opts...)
 }
 
@@ -62,7 +62,7 @@ func (me *Worker) fetchConfig() {
 	var conf *pb.Configuration
 	var err error
 	for {
-		conf, err = me.coor.GetConfig(context.Background(), &pb.Empty{})
+		conf, err = me.coor.GetConfig(context.Background(), &pb.Cluster{Id: me.cluster})
 		if err != nil {
 			fmt.Printf("ERR #234FSDOUD OUTDATED %v\n", err)
 			time.Sleep(2 * time.Second)
@@ -81,10 +81,11 @@ func (me *Worker) fetchConfig() {
 	me.Lock()
 	me.term = int(conf.GetTerm())
 	me.partitions = make([]partition, conf.GetTotalPartitions())
-	for _, w := range conf.GetWorkers() {
-		for _, p := range w.GetPartitions() {
-			me.partitions[p].worker_id = w.GetId()
-			me.partitions[p].worker_host = w.GetHost()
+	for workerid, pars := range conf.GetPartitions() {
+		for _, p := range pars.GetPartitions() {
+			me.partitions[p].worker_id = workerid
+			me.partitions[p].worker_host = conf.GetHosts()[workerid]
+
 			me.partitions[p].prepare_worker_id = ""
 			me.partitions[p].prepare_worker_host = ""
 			me.partitions[p].state = NORMAL
@@ -94,12 +95,13 @@ func (me *Worker) fetchConfig() {
 	me.Unlock()
 }
 
-func NewWorker(server *grpc.Server, cluster, id, coordinator string) *Worker {
+func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string) *Worker {
 	me := &Worker{
 		Mutex:   &sync.Mutex{},
 		version: "1.0.0",
 		cluster: cluster,
 		term:    0,
+		host:    host,
 	}
 
 	cconn, err := dialGrpc(coordinator)
@@ -128,21 +130,25 @@ func (me *Worker) validateRequest(version, cluster string, term int) error {
 	return nil
 }
 
-func (me *Worker) GetConfig(ctx context.Context, em *pb.Empty) (*pb.Configuration, error) {
-	return me.coor.GetConfig(ctx, em)
+func (me *Worker) GetHost(ctx context.Context, cluster *pb.Cluster) (*pb.WorkerHost, error) {
+	return &pb.WorkerHost{Cluster: me.cluster, Host: me.host, Id: me.id}, nil
 }
 
-func (me *Worker) Request(ctx context.Context, conf *pb.Configuration) (*pb.Empty, error) {
+func (me *Worker) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
+	return me.coor.GetConfig(ctx, cluster)
+}
+
+func (me *Worker) Prepare(ctx context.Context, conf *pb.Configuration) (*pb.Empty, error) {
 	err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
 	if err != nil {
 		return nil, err
 	}
 
 	me.Lock()
-	for _, w := range conf.GetWorkers() {
-		for _, p := range w.GetPartitions() {
-			me.partitions[p].prepare_worker_id = w.GetId()
-			me.partitions[p].prepare_worker_host = w.GetHost()
+	for workerid, pars := range conf.GetPartitions() {
+		for _, p := range pars.GetPartitions() {
+			me.partitions[p].prepare_worker_id = workerid
+			me.partitions[p].prepare_worker_host = conf.GetHosts()[workerid]
 
 			if me.partitions[p].prepare_worker_id != me.partitions[p].worker_id {
 				me.partitions[p].state = BLOCKED
@@ -199,6 +205,7 @@ type interceptor func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServ
 func (me *Worker) CreateIntercept(mgr interface{}) interceptor {
 	outTypeM := analysis(mgr)
 	conn := &sync.Map{}
+	dialMutex := &sync.Mutex{}
 	return func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
 		md, _ := metadata.FromIncomingContext(ctx)
 		pkey := strings.Join(md[PartitionKey], "")
@@ -224,14 +231,17 @@ func (me *Worker) CreateIntercept(mgr interface{}) interceptor {
 			return handler(ctx, in)
 		}
 
+		dialMutex.Lock()
 		cci, ok := conn.Load(par.worker_host)
 		if !ok {
 			var err error
 			cci, err = dialGrpc(par.worker_host)
 			if err != nil {
+				dialMutex.Unlock()
 				return nil, err
 			}
 			conn.Store(par.worker_host, cci)
+			dialMutex.Unlock()
 		}
 		return me.forward(cci.(*grpc.ClientConn), outTypeM, ctx, in, sinfo)
 	}
