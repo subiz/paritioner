@@ -91,7 +91,6 @@ func (me *Worker) fetchConfig() {
 			me.partitions[p].state = NORMAL
 		}
 	}
-
 	me.Unlock()
 }
 
@@ -101,6 +100,7 @@ func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string
 		version: "1.0.0",
 		cluster: cluster,
 		term:    0,
+		id:      id,
 		host:    host,
 	}
 
@@ -109,6 +109,19 @@ func NewWorker(host string, server *grpc.Server, cluster, id, coordinator string
 		panic(err)
 	}
 	me.coor = pb.NewCoordinatorClient(cconn)
+	for {
+		_, err := me.coor.Join(context.Background(), &pb.WorkerHost{
+			Cluster: cluster,
+			Host:    host,
+			Id:      id,
+		})
+		if err == nil {
+			break
+		}
+		fmt.Printf("ERR while joining cluster %v. Retry in 2 secs\n", err)
+		time.Sleep(2 * time.Second)
+	}
+
 	me.fetchConfig()
 
 	pb.RegisterWorkerServer(server, me)
