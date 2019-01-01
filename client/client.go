@@ -69,15 +69,15 @@ func NewClient(service string) *Client {
 }
 
 func fetchPartitions(pclient pb.WorkerClient) ([]string, error) {
-	conf, err := pclient.GetConfig(context.Background(), &pb.Empty{})
+	conf, err := pclient.GetConfig(context.Background(), &pb.Cluster{})
 	if err != nil {
 		return nil, err
 	}
 
 	partitions := make([]string, conf.GetTotalPartitions())
-	for _, w := range conf.GetWorkers() {
-		for _, parNum := range w.GetPartitions() {
-			partitions[parNum] = w.GetHost()
+	for workerid, pars := range conf.GetPartitions() {
+		for _, parNum := range pars.GetPartitions() {
+			partitions[parNum] = conf.GetHosts()[workerid]
 		}
 	}
 	return partitions, nil
