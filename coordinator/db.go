@@ -1,16 +1,18 @@
 package coordinator
 
 import (
+	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/golang/protobuf/proto"
-	"github.com/subiz/cassandra"
 	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
+	"time"
 )
 
 const (
 	keyspace = "partitioner"
 	tblConf  = "conf"
+	tblHost  = "host"
 )
 
 // DB allows cluster to reload its state after crash by persisting the state to
@@ -26,12 +28,29 @@ const (
 //   };
 //
 //   CREATE TABLE partitioner.conf(cluster TEXT,conf BLOB,PRIMARY KEY(cluster));
+//   CREATE TABLE partitioner.host(cluster TEXT,id ASCII, host ASCII, PRIMAY KEY(cluster, id));
 type DB struct {
 	// hold connection to the database
 	session *gocql.Session
 
 	// ID of cluster
 	cluster string
+}
+
+// connect creates new session to cassandra database, this function auto
+// retry on error, it blocks until connection is successfully made
+func connect(seeds []string, keyspace string) *gocql.Session {
+	cluster := gocql.NewCluster(seeds...)
+	cluster.Timeout = 10 * time.Second
+	cluster.Keyspace = keyspace
+	for {
+		session, err := cluster.CreateSession()
+		if err == nil {
+			return session
+		}
+		fmt.Println("cassandra", err, ". Retring after 5sec...")
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // NewDB creates new DB object for a cluster
@@ -41,13 +60,8 @@ type DB struct {
 //     discovered.
 //   cluster: used to identify the cluster
 func NewDB(seeds []string, cluster string) *DB {
-	cql := &cassandra.Query{}
-	if err := cql.Connect(seeds, keyspace); err != nil {
-		panic(err)
-	}
-
 	me := &DB{}
-	me.session = cql.Session
+	me.session = connect(seeds, keyspace)
 	return me
 }
 
@@ -76,9 +90,49 @@ func (me *DB) Load() (*pb.Configuration, error) {
 		return &pb.Configuration{}, nil
 	}
 
+	if err != nil {
+		return nil, errors.Wrap(err, 500, errors.E_database_error)
+	}
+
 	conf := &pb.Configuration{}
 	if err := proto.Unmarshal(confb, conf); err != nil {
 		return nil, errors.Wrap(err, 500, errors.E_proto_marshal_error)
 	}
 	return conf, nil
+}
+
+// SaveHost persists pair <worker ID and worker host> to the database.
+// After this, user can use LoadHosts to lookup host
+func (me *DB) SaveHost(id, host string) error {
+	err := me.session.Query("INSERT INTO "+tblHost+"(cluster, id, host) VALUES(?,?,?)",
+		me.cluster, id, host).Exec()
+	if err != nil {
+		return errors.Wrap(err, 500, errors.E_database_error)
+	}
+	return nil
+}
+
+// RemoveHost deletes worker's host by it's ID
+func (me *DB) RemoveHost(id string) error {
+	err := me.session.Query("DELETE FROM "+tblHost+" WHERE cluster=? AND id=?",
+		me.cluster, id).Exec()
+	if err != nil {
+		return errors.Wrap(err, 500, errors.E_database_error)
+	}
+	return nil
+}
+
+// LoadHosts lookups all worker hosts and IDs by cluster name
+func (me *DB) LoadHosts() (map[string]string, error) {
+	hosts := make(map[string]string)
+	iter := me.session.Query("SELECT id,host FROM "+tblHost+" WHERE cluster=?",
+		me.cluster).Iter()
+	id, host := "", ""
+	for iter.Scan(&id, &host) {
+		hosts[id] = host
+	}
+	if err := iter.Close(); err != nil {
+		return nil, errors.Wrap(err, 500, errors.E_database_error, me.cluster, id)
+	}
+	return hosts, nil
 }
