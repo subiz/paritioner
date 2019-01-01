@@ -1,3 +1,4 @@
 /vendor
 coordinator
+/.cache
 coordinator.tar.gz
