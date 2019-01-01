@@ -60,7 +60,7 @@ func runServer(ctx *cli.Context) {
 	}
 	println("hostname", hostname)
 
-	w := worker.NewWorker(host, "hello_test", hostname, "coordinator:8021")
+	w := worker.NewWorker(host, "hellotest", hostname, "coordinator:8021")
 	interceptor := grpc.UnaryInterceptor(w.CreateIntercept(pb.NewHelloClient(nil)))
 	grpcserver := grpc.NewServer(interceptor)
 	pb.RegisterWorkerServer(grpcserver, w)

@@ -54,7 +54,7 @@
     "worker",
   ]
   pruneopts = "UT"
-  revision = "8eb08a1989e3d620e8a7a6e4f5b800db58143c8a"
+  revision = "01d2800ad768d23303e4322cc06a3f7e65825c63"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
