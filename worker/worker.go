@@ -135,6 +135,7 @@ func (me *Worker) GetHost(ctx context.Context, cluster *pb.Cluster) (*pb.WorkerH
 }
 
 func (me *Worker) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
+	cluster.Id = me.cluster
 	return me.coor.GetConfig(ctx, cluster)
 }
 
