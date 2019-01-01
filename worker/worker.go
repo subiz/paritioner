@@ -64,14 +64,14 @@ func (me *Worker) fetchConfig() {
 	for {
 		conf, err = me.coor.GetConfig(context.Background(), &pb.Cluster{Id: me.cluster})
 		if err != nil {
-			fmt.Printf("ERR #234FSDOUD OUTDATED %v\n", err)
+			fmt.Printf("ERR #234FOISDOUD config %v\n", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
 		if err != nil {
-			fmt.Printf("ERR #234FSDOUD OUTDATED %v\n", err)
+			fmt.Printf("ERR #234DDFSDOUD OUTDATED %v\n", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
