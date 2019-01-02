@@ -30,11 +30,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:203a1b295add67b1f4e03d5518ddd070d6573d7a220f928aa217c600733a45e9"
+  digest = "1:28303a39e8ab2b1e74e6f695316101c6ad00e541cb431fc40fe06cc240f6db11"
   name = "github.com/subiz/header"
   packages = ["partitioner"]
   pruneopts = "UT"
-  revision = "a3f238b28a3a4a4a6c4572bf51bd7cbc6031aa67"
+  revision = "a56cd6b1618978084d78f13951f91cede7651195"
 
 [[projects]]
   branch = "master"
@@ -137,7 +137,6 @@
   input-imports = [
     "github.com/subiz/header/partitioner",
     "google.golang.org/grpc",
-    "google.golang.org/grpc/balancer/roundrobin",
     "google.golang.org/grpc/metadata",
   ]
   solver-name = "gps-cdcl"
