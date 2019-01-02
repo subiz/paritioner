@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/golang/protobuf/proto"
+"fmt"
 	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
 	"sync"
@@ -29,9 +30,10 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	if err != nil {
 		panic(err)
 	}
+	me.config = conf
 
 	// init config
-	if conf == nil {
+	if conf.GetCluster() == "" || conf.GetTotalPartitions() == 0 {
 		me.config = &pb.Configuration{
 			Version:         "1.0.0",
 			Cluster:         cluster,
@@ -43,6 +45,7 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 			panic(err)
 		}
 	}
+
 	return me
 }
 
@@ -75,9 +78,18 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 
 	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
 	partitionM := make(map[string][]int32)
-	for _, w := range me.config.GetPartitions() {
-		partitionM[w.GetId()] = w.GetPartitions()
+	for workerid, w := range me.config.GetPartitions() {
+		partitionM[workerid] = w.GetPartitions()
 	}
+
+	if len(partitionM) == 0 {
+		allpars := make([]int32, 0)
+		for i := int32(0); i < me.config.GetTotalPartitions(); i++ {
+			allpars = append(allpars, i)
+		}
+		partitionM["_"] = allpars
+	}
+
 	partitionM = balance(partitionM, newWorkers)
 	newPars := make(map[string]*pb.WorkerPartitions)
 	for id, pars := range partitionM {
@@ -113,6 +125,10 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 			}
 			numVotes++
 			if numVotes == len(newWorkers) { // successed
+				fmt.Printf("SUCCESS %v\n", newPars)
+				if err := me.db.Store(newConfig); err != nil {
+					return err
+				}
 				me.config = newConfig
 				return nil
 			}
