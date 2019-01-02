@@ -11,11 +11,11 @@ func compareIntArr(a1, a2 []int32) bool {
 
 	m := make(map[int32]bool, len(a1))
 
-	for i := range a1 {
+	for _, i := range a1 {
 		m[i] = true
 	}
 
-	for i := range a2 {
+	for _, i := range a2 {
 		if _, ok := m[i]; !ok {
 			return false
 		}
@@ -117,6 +117,19 @@ func TestBalance(t *testing.T) {
 			"1": []int32{1, 2, 3},
 			"2": []int32{9, 5, 6},
 			"3": []int32{7, 8, 4},
+		},
+	}, {
+		desc: "remove many nodes",
+		config: map[string][]int32{
+			"1": []int32{1, 2, 3, 4, 5},
+			"2": []int32{6, 7, 8, 9, 10},
+			"3": []int32{11, 12, 13, 14, 15},
+			"4": []int32{16, 17, 18, 19, 20},
+		},
+		nodes: []string{"1", "2"},
+		expected: map[string][]int32{
+			"1": []int32{1, 2, 3, 4, 5, 11, 12, 13, 14, 15},
+			"2": []int32{6, 7, 8, 9, 10, 16, 17, 18, 19, 20},
 		},
 	}}
 
