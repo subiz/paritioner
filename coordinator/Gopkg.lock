@@ -142,11 +142,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4c480ed4a54f677af698e054732dbe4aaccdd9e6c9c9927683487e55b919ea96"
+  digest = "1:685cb4f39f3bbb03f520a866ffefd5348b2e73d2f8925e7de9b4cee39923c21c"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "96708b9069de58da31aea5a82a34f7af138023f6"
+  revision = "23ff5017f8773d408f45a9831ab8691b242f4ed6"
 
 [[projects]]
   branch = "master"
@@ -158,7 +158,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:2d7874fe8df2e1a18d1407ed6bd0c3fbbfe30324a3b3248bc32536d5c91d1314"
+  digest = "1:379e70d7ed790a165235cba801092ab905d0417350fa41d1566e14d691520efa"
   name = "github.com/subiz/goutils"
   packages = [
     "grpc",
@@ -166,11 +166,11 @@
     "map",
   ]
   pruneopts = "UT"
-  revision = "dae00ac99618613567b66d4f1c935940cc270036"
+  revision = "f1ea33171bd8ec436ce982643df2f35ef2c32202"
 
 [[projects]]
   branch = "master"
-  digest = "1:6b89efdc8e7e96777007212b75f1bd1206db892a6b286dc4d41ab7cf5161aaea"
+  digest = "1:5dc4acf8e76c52e660ab8476a9c9157e527e3fa9c27c1bb404ffc4552d5f3206"
   name = "github.com/subiz/header"
   packages = [
     "auth",
@@ -179,7 +179,7 @@
     "partitioner",
   ]
   pruneopts = "UT"
-  revision = "a3f238b28a3a4a4a6c4572bf51bd7cbc6031aa67"
+  revision = "a56cd6b1618978084d78f13951f91cede7651195"
 
 [[projects]]
   branch = "master"
@@ -320,7 +320,6 @@
     "github.com/subiz/header/partitioner",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
-    "google.golang.org/grpc/balancer/roundrobin",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
