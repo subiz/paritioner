@@ -8,6 +8,7 @@ import (
 	"github.com/subiz/partitioner/worker"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
@@ -60,7 +61,8 @@ func runServer(ctx *cli.Context) {
 	}
 	println("hostname", hostname)
 
-	w := worker.NewWorker(host, "hellotest", hostname, "coordinator:8021")
+	w := worker.NewWorker(hostname+".hellotest"+host, "hellotest", hostname, "coordinator:8021")
+
 	interceptor := grpc.UnaryInterceptor(w.CreateIntercept(pb.NewHelloClient(nil)))
 	grpcserver := grpc.NewServer(interceptor)
 	pb.RegisterWorkerServer(grpcserver, w)
@@ -72,19 +74,23 @@ func runServer(ctx *cli.Context) {
 }
 
 func runClient(ctx *cli.Context) {
-
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
 	opts = append(opts, grpc.WithBlock())
 	opts = append(opts, grpc.WithTimeout(10*time.Second))
-	opts = append(opts, client.NewClient("localhost:50051").WithInterceptor())
-	conn, err := grpc.Dial("localhost:50051", opts...)
+	opts = append(opts, client.NewInterceptor("hellotest-0.hellotest:50051"))
+	conn, err := grpc.Dial("hellotest-0.hellotest:50051", opts...)
 	if err != nil {
 		panic(err)
 	}
 
+	key := ctx.Args().Get(0)
+	fmt.Println("got key", key)
+	ct := metadata.AppendToOutgoingContext(context.Background(),
+		"partitionkey", key)
+
 	c := pb.NewHelloClient(conn)
-	s, err := c.Hello(context.Background(), &pb.String{Str: "haivan"})
+	s, err := c.Hello(ct, &pb.String{Str: "haivan"})
 	if err != nil {
 		panic(err)
 	}

@@ -31,11 +31,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4c480ed4a54f677af698e054732dbe4aaccdd9e6c9c9927683487e55b919ea96"
+  digest = "1:f0588ae920dc4f17758685808983cccb271ca37ddd27908134750741246206ae"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "96708b9069de58da31aea5a82a34f7af138023f6"
+  revision = "aee718cf1364a61e9b32bbc02782952405f16ca3"
 
 [[projects]]
   branch = "master"
@@ -47,14 +47,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:dcb393936523201e9a47f4514ca480fd5f671e1c98459c61a010c53bf9007305"
+  digest = "1:6d8879dfcd981863c8dbdee406a56c7b28ec3d8530bf373246b2dc6c9781a197"
   name = "github.com/subiz/partitioner"
   packages = [
     "client",
     "worker",
   ]
   pruneopts = "UT"
-  revision = "01d2800ad768d23303e4322cc06a3f7e65825c63"
+  revision = "587b81071888fbbd604be016b8724b4c4f3ea362"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -170,6 +170,7 @@
     "github.com/subiz/partitioner/worker",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
+    "google.golang.org/grpc/metadata",
     "google.golang.org/grpc/reflection",
   ]
   solver-name = "gps-cdcl"
