@@ -53,7 +53,7 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	// Enabling WithBlock tells the client to not give up trying to find a server
 	opts = append(opts, grpc.WithBlock())
 	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(10*time.Second))
+	opts = append(opts, grpc.WithTimeout(5*time.Second))
 	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
 	return grpc.Dial(service, opts...)
 }
@@ -62,6 +62,7 @@ func (me *Worker) fetchConfig() {
 	var conf *pb.Configuration
 	var err error
 	for {
+		fmt.Println("FETCHING CONFIG")
 		conf, err = me.coor.GetConfig(context.Background(), &pb.Cluster{Id: me.cluster})
 		if err != nil {
 			fmt.Printf("ERR #234FOISDOUD config %v\n", err)
@@ -109,6 +110,7 @@ func NewWorker(host string, cluster, id, coordinator string) *Worker {
 		panic(err)
 	}
 	me.coor = pb.NewCoordinatorClient(cconn)
+	fmt.Println("JOINING THE CLUSTER...")
 	for {
 		_, err := me.coor.Join(context.Background(), &pb.WorkerHost{
 			Cluster: cluster,
@@ -122,6 +124,7 @@ func NewWorker(host string, cluster, id, coordinator string) *Worker {
 		time.Sleep(2 * time.Second)
 	}
 
+	fmt.Println("JOINED")
 	me.fetchConfig()
 	return me
 }
@@ -170,7 +173,7 @@ func (me *Worker) Prepare(ctx context.Context, conf *pb.Configuration) (*pb.Empt
 	me.Unlock()
 
 	go me.fetchConfig()
-	return nil, nil
+	return &pb.Empty{}, nil
 }
 
 func analysis(server interface{}) map[string]reflect.Type {
