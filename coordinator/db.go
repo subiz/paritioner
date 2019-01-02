@@ -64,6 +64,8 @@ func NewDB(seeds []string) *DB {
 
 // Store persists configuration to the database
 func (me *DB) Store(conf *pb.Configuration) error {
+	b, _ :=conf.MarshalJSON()
+	println("STORING", string(b))
 	confb, err := proto.Marshal(conf)
 	if err != nil {
 		return errors.Wrap(err, 500, errors.E_proto_marshal_error)
@@ -95,6 +97,7 @@ func (me *DB) Load(cluster string) (*pb.Configuration, error) {
 	if err := proto.Unmarshal(confb, conf); err != nil {
 		return nil, errors.Wrap(err, 500, errors.E_proto_marshal_error)
 	}
+	conf.Cluster = cluster
 	return conf, nil
 }
 
