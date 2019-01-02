@@ -7,7 +7,6 @@ import (
 	"github.com/subiz/goutils/log"
 	pb "github.com/subiz/header/partitioner"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"net"
 	"sync"
 	"time"
@@ -30,6 +29,7 @@ func NewServer(kubeservice string, db *DB) *Server {
 	s.cluster = kubeservice
 	s.dialLock = &sync.Mutex{}
 	s.db = db
+	s.workers = make(map[string]pb.WorkerClient)
 	s.coor = NewCoordinator(kubeservice, db, s)
 	var err error
 	s.hosts, err = db.LoadHosts(kubeservice)
@@ -109,13 +109,13 @@ func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					err = errors.New(500, errors.E_unknown, r)
+					err = errors.New(500, errors.E_unknown, r, workerid, host)
 				}
 			}()
 
 			conn, er := dialGrpc(host)
 			if er != nil {
-				err = er
+				err = errors.Wrap(er, 500, errors.E_unknown, workerid, host)
 				return
 			}
 			w = pb.NewWorkerClient(conn)
@@ -127,8 +127,10 @@ func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
 		return err
 	}
 
-	_, err = w.Prepare(context.Background(), conf)
-	return err
+	if _, err := w.Prepare(context.Background(), conf); err != nil {
+		return errors.Wrap(err, 500, errors.E_unknown, workerid, host)
+	}
+	return nil
 }
 
 func dialGrpc(service string) (*grpc.ClientConn, error) {
@@ -137,8 +139,6 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	// Enabling WithBlock tells the client to not give up trying to find a server
 	opts = append(opts, grpc.WithBlock())
 	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(10*time.Second))
-	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
-	//opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(res)))
+	opts = append(opts, grpc.WithTimeout(1*time.Second))
 	return grpc.Dial(service, opts...)
 }
