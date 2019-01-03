@@ -113,7 +113,7 @@ func (me *Client) clientInterceptor(ctx context.Context, method string, in inter
 
 	// hashing key to find the partition number
 	ghash.Write([]byte(pkey))
-	par := ghash.Sum32() % 1000
+	par := ghash.Sum32() % uint32(len(me.partitions))
 	ghash.Reset()
 
 	host := me.partitions[par]

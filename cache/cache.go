@@ -31,6 +31,10 @@ func NewCache(size int, w *worker.Worker) *Cache {
 	}
 	me.cache = cache
 	w.OnUpdate(func(pars []int32) { // called when partition is changed
+		if len(pars) == 0 {
+			me.cache.Purge()
+			return
+		}
 		// remove all key which is not in our partitions
 		me.Lock()
 		defer me.Unlock()
@@ -42,7 +46,7 @@ func NewCache(size int, w *worker.Worker) *Cache {
 
 		for _, k := range keys {
 			ghash.Write(k.([]byte))
-			parnumber := ghash.Sum32() % 1000
+			parnumber := ghash.Sum32() % uint32(len(mpars))
 			ghash.Reset()
 			if mpars[parnumber] == false {
 				me.cache.Remove(k)
