@@ -22,16 +22,10 @@ const (
 	PartitionKey = "partitionkey"
 )
 
-func hash(s string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(s))
-	return h.Sum32()
-}
-
 type partition struct {
 	worker_id           string
 	worker_host         string
-	state               int // OFF, NORMAL, BLOCKED,
+	state               int // NORMAL, BLOCKED,
 	prepare_worker_id   string
 	prepare_worker_host string
 }
@@ -45,6 +39,7 @@ type Worker struct {
 	term       int
 	coor       pb.CoordinatorClient
 	host       string
+	onUpdates  []func([]int32)
 }
 
 func dialGrpc(service string) (*grpc.ClientConn, error) {
@@ -56,6 +51,12 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	opts = append(opts, grpc.WithTimeout(5*time.Second))
 	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
 	return grpc.Dial(service, opts...)
+}
+
+func (me *Worker) OnUpdate(f func([]int32)) {
+	me.Lock()
+	defer me.Unlock()
+	me.onUpdates = append(me.onUpdates, f)
 }
 
 func (me *Worker) fetchConfig() {
@@ -91,6 +92,16 @@ func (me *Worker) fetchConfig() {
 			me.partitions[p].prepare_worker_host = ""
 			me.partitions[p].state = NORMAL
 		}
+	}
+
+	ourpars := make([]int32, 0)
+	for p, par := range me.partitions {
+		if par.worker_id == me.id {
+			ourpars = append(ourpars, int32(p))
+		}
+	}
+	for _, f := range me.onUpdates {
+		go f(ourpars)
 	}
 	me.Unlock()
 }
@@ -201,7 +212,7 @@ func analysis(server interface{}) map[string]reflect.Type {
 	return m
 }
 
-
+var ghash = fnv.New32a()
 func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 	outTypeM := analysis(mgr)
 	conn := &sync.Map{}
@@ -214,7 +225,10 @@ func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 			return handler(ctx, in)
 		}
 
-		parindex := hash(pkey) % 1000
+		ghash.Write([]byte(pkey))
+		parindex := ghash.Sum32() % 1000
+		ghash.Reset()
+
 		me.Lock()
 		par := me.partitions[parindex]
 		me.Unlock()
