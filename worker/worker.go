@@ -22,6 +22,9 @@ const (
 	PartitionKey = "partitionkey"
 )
 
+// global hashing util, used to hash key to partition number
+var ghash = fnv.New32a()
+
 type partition struct {
 	worker_id           string
 	worker_host         string
@@ -212,7 +215,6 @@ func analysis(server interface{}) map[string]reflect.Type {
 	return m
 }
 
-var ghash = fnv.New32a()
 func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 	outTypeM := analysis(mgr)
 	conn := &sync.Map{}
