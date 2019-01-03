@@ -49,19 +49,19 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:54fa11c731652cec70a3fcd9bf35041e1e6918df8ead353d19543bf91c669968"
+  digest = "1:ffcc5d50038aba53d6daab2506fe271590634fd8f278b7fac9e54c032a378f7a"
   name = "github.com/subiz/header"
   packages = ["partitioner"]
   pruneopts = "UT"
-  revision = "68569cafda00ebe8843a0de5d6d0779ace4fc65c"
+  revision = "2db0a89eb268868114f64b0918c28a499d9b8e29"
 
 [[projects]]
   branch = "master"
-  digest = "1:9db0c41a21a6710c2a56a72d2ba86a084dd708c1fa87a5d611cb54863f05ca85"
+  digest = "1:4f901213271d30eccfb5f6e3895fd87c2242224fb67653d823834aa58b7190da"
   name = "github.com/subiz/partitioner"
   packages = ["worker"]
   pruneopts = "UT"
-  revision = "e62ea326bbefb3f87f8747828a77acacb417e225"
+  revision = "bd44c8359497dedf697f3887373e2a0f9a420f77"
 
 [[projects]]
   branch = "master"
