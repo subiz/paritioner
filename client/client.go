@@ -18,6 +18,9 @@ const (
 	PartitionKey = "partitionkey"
 )
 
+// global hashing util, used to hash key to partition number
+var ghash = fnv.New32a()
+
 // Client is used to partition request through workers in cluster
 // user uses this struct by create an GRPC interceptor, the interceptor will
 // trigger right before the request is sent, redirecting the request to assigned
@@ -109,9 +112,9 @@ func (me *Client) clientInterceptor(ctx context.Context, method string, in inter
 	}
 
 	// hashing key to find the partition number
-	h := fnv.New32a()
-	h.Write([]byte(pkey))
-	par := h.Sum32()  % 1000
+	ghash.Write([]byte(pkey))
+	par := ghash.Sum32() % 1000
+	ghash.Reset()
 
 	host := me.partitions[par]
 	me.Lock()
@@ -137,9 +140,9 @@ func (me *Client) clientInterceptor(ctx context.Context, method string, in inter
 func (me *Client) fetchLoop(pclient pb.WorkerClient) {
 	for {
 		var pars []string
-		var err error
 		func() { // wrap in a function to prevent panicing
 			defer func() { recover() }()
+			var err error
 			pars, err = fetchPartitions(pclient)
 			if err != nil {
 				fmt.Printf("ERR#FS94GPOFD fetching partition: %v\n", err)
