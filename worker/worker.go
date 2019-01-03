@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	// represense blocked state of an partition mean...
 	BLOCKED = -1
 	NORMAL  = 1
 
@@ -43,80 +44,29 @@ type Worker struct {
 	coor       pb.CoordinatorClient
 	host       string
 	onUpdates  []func([]int32)
+	conn       map[string]*grpc.ClientConn
+	dialMutex  *sync.Mutex
 }
 
-func dialGrpc(service string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	// Enabling WithBlock tells the client to not give up trying to find a server
-	opts = append(opts, grpc.WithBlock())
-	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(5*time.Second))
-	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
-	return grpc.Dial(service, opts...)
-}
-
-func (me *Worker) OnUpdate(f func([]int32)) {
-	me.Lock()
-	defer me.Unlock()
-	me.onUpdates = append(me.onUpdates, f)
-}
-
-func (me *Worker) fetchConfig() {
-	var conf *pb.Configuration
-	var err error
-	for {
-		fmt.Println("FETCHING CONFIG")
-		conf, err = me.coor.GetConfig(context.Background(), &pb.Cluster{Id: me.cluster})
-		if err != nil {
-			fmt.Printf("ERR #234FOISDOUD config %v\n", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
-		err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
-		if err != nil {
-			fmt.Printf("ERR #234DDFSDOUD OUTDATED %v\n", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		break
-	}
-
-	me.Lock()
-	me.term = int(conf.GetTerm())
-	me.partitions = make([]partition, conf.GetTotalPartitions())
-	for workerid, pars := range conf.GetPartitions() {
-		for _, p := range pars.GetPartitions() {
-			me.partitions[p].worker_id = workerid
-			me.partitions[p].worker_host = conf.GetHosts()[workerid]
-
-			me.partitions[p].prepare_worker_id = ""
-			me.partitions[p].prepare_worker_host = ""
-			me.partitions[p].state = NORMAL
-		}
-	}
-
-	ourpars := make([]int32, 0)
-	for p, par := range me.partitions {
-		if par.worker_id == me.id {
-			ourpars = append(ourpars, int32(p))
-		}
-	}
-	for _, f := range me.onUpdates {
-		go f(ourpars)
-	}
-	me.Unlock()
-}
-
+// NewWorker creates and starts a new Worker object
+// parameters:
+//  host: grpc host address for coordinator or other workers to connect
+//    to this worker. E.g: web-1.web:8080
+//  cluster: ID of cluster. E.g: web
+//  id: ID of the worker, this must be unique for each workers inside
+//    cluster. E.g: web-1
+//  coordinator: host address of coordinator, used to listen changes
+//    and making transaction. E.g: coordinator:8021
 func NewWorker(host string, cluster, id, coordinator string) *Worker {
 	me := &Worker{
-		Mutex:   &sync.Mutex{},
-		version: "1.0.0",
-		cluster: cluster,
-		term:    0,
-		id:      id,
-		host:    host,
+		Mutex:     &sync.Mutex{},
+		version:   "1.0.0",
+		cluster:   cluster,
+		term:      0,
+		id:        id,
+		host:      host,
+		conn:      make(map[string]*grpc.ClientConn),
+		dialMutex: &sync.Mutex{},
 	}
 
 	cconn, err := dialGrpc(coordinator)
@@ -143,6 +93,82 @@ func NewWorker(host string, cluster, id, coordinator string) *Worker {
 	return me
 }
 
+// OnUpdate registers a subscriber to workers.
+// The subscriber get call synchronously when worker's partitions is changed
+// worker will pass list of its new partitions through subscriber parameter
+func (me *Worker) OnUpdate(f func([]int32)) {
+	me.Lock()
+	defer me.Unlock()
+	me.onUpdates = append(me.onUpdates, f)
+}
+
+// fetchConfig updates worker partition map to the current configuration of
+// coordinator.
+// Note: this function may take up to ten of seconds to execute since the
+// cluster is in middle of rebalance process. During that time, coordinator
+// would be blocking any requests.
+func (me *Worker) fetchConfig() {
+	var conf *pb.Configuration
+	var err error
+	for {
+		fmt.Println("FETCHING CONFIG")
+		conf, err = me.coor.GetConfig(context.Background(), &pb.Cluster{Id: me.cluster})
+		if err != nil {
+			fmt.Printf("ERR #234FOISDOUD config %v\n", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		err := me.validateRequest(conf.GetVersion(), conf.GetCluster(), int(conf.GetTerm()))
+		if err != nil {
+			fmt.Printf("ERR #234DDFSDOUD OUTDATED %v\n", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
+
+	me.Lock()
+	// rebuild partition map using coordinator's configuration
+	me.term = int(conf.GetTerm())
+	me.partitions = make([]partition, conf.GetTotalPartitions())
+	for workerid, pars := range conf.GetPartitions() {
+		for _, p := range pars.GetPartitions() {
+			me.partitions[p].worker_id = workerid
+			me.partitions[p].worker_host = conf.GetHosts()[workerid]
+
+			me.partitions[p].prepare_worker_id = ""
+			me.partitions[p].prepare_worker_host = ""
+			me.partitions[p].state = NORMAL
+		}
+	}
+
+	// notify subscriber about the change
+	// this must done synchronously since order of changes might be
+	// critical with some subscribers
+	ourpars := make([]int32, 0)
+	for p, par := range me.partitions {
+		if par.worker_id == me.id {
+			ourpars = append(ourpars, int32(p))
+		}
+	}
+	wg := &sync.WaitGroup{}
+	wg.Add(len(me.onUpdates))
+	for _, f := range me.onUpdates {
+		func() { // wrap in a function to prevent panicing
+			defer func() {
+				recover()
+				wg.Done()
+			}()
+			f(ourpars)
+		}()
+	}
+	wg.Wait()
+	me.Unlock()
+}
+
+// validateRequest makes sure version, cluster and term are upto date and
+//   is sent to correct cluster
 func (me *Worker) validateRequest(version, cluster string, term int) error {
 	if version != me.version {
 		return errors.New(400, errors.E_invalid_partition_version, "only support version "+me.version)
@@ -158,10 +184,7 @@ func (me *Worker) validateRequest(version, cluster string, term int) error {
 	return nil
 }
 
-func (me *Worker) GetHost(ctx context.Context, cluster *pb.Cluster) (*pb.WorkerHost, error) {
-	return &pb.WorkerHost{Cluster: me.cluster, Host: me.host, Id: me.id}, nil
-}
-
+// GetConfig is a GRPC handler, it returns current configuration of the cluster
 func (me *Worker) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
 	cluster.Id = me.cluster
 	return me.coor.GetConfig(ctx, cluster)
@@ -190,7 +213,15 @@ func (me *Worker) Prepare(ctx context.Context, conf *pb.Configuration) (*pb.Empt
 	return &pb.Empty{}, nil
 }
 
-func analysis(server interface{}) map[string]reflect.Type {
+// analysisReturnType returns all return types for every GRPC method in server handler
+// the returned map takes full method name (i.e., /package.service/method) as key, and the return type as value
+// For example, with handler
+//   (s *server) func Goodbye() string {}
+//   (s *server) func Ping(_ context.Context, _ *pb.Ping) (*pb.Pong, error) {}
+//   (s *server) func Hello(_ context.Context, _ *pb.Empty) (*pb.String, error) {}
+// this function detected 2 GRPC methods is Ping and Hello, it would return
+// {"Ping": *pb.Pong, "Hello": *pb.Empty}
+func analysisReturnType(server interface{}) map[string]reflect.Type {
 	m := make(map[string]reflect.Type)
 	t := reflect.TypeOf(server).Elem()
 	for i := 0; i < t.NumMethod(); i++ {
@@ -215,10 +246,9 @@ func analysis(server interface{}) map[string]reflect.Type {
 	return m
 }
 
+// CreateIntercept makes a new GRPC server interceptor
 func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
-	outTypeM := analysis(mgr)
-	conn := &sync.Map{}
-	dialMutex := &sync.Mutex{}
+	returnedTypeM := analysisReturnType(mgr)
 	return func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
 		md, _ := metadata.FromIncomingContext(ctx)
 		pkey := strings.Join(md[PartitionKey], "")
@@ -228,7 +258,7 @@ func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 		}
 
 		ghash.Write([]byte(pkey))
-		parindex := ghash.Sum32() % 1000
+		parindex := ghash.Sum32() % uint32(len(me.partitions)) // 1024
 		ghash.Reset()
 
 		me.Lock()
@@ -247,33 +277,53 @@ func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 			return handler(ctx, in)
 		}
 
-		dialMutex.Lock()
-		cci, ok := conn.Load(par.worker_host)
-		if !ok {
-			var err error
-			cci, err = dialGrpc(par.worker_host)
-			if err != nil {
-				dialMutex.Unlock()
-				return nil, err
-			}
-			conn.Store(par.worker_host, cci)
-			dialMutex.Unlock()
-		}
-		return forward(cci.(*grpc.ClientConn), outTypeM, ctx, in, sinfo)
+		return me.forward(par.worker_host, sinfo.FullMethod, returnedTypeM[sinfo.FullMethod], ctx, in)
 	}
 }
 
-// key is method name (not fullmethod), value is type (not pointer) of return value
-func forward(cc *grpc.ClientConn, outType map[string]reflect.Type, ctx context.Context, in interface{}, serverinfo *grpc.UnaryServerInfo) (interface{}, error) {
+// forward redirects a GRPC calls to another host, header and trailer are preserved
+// parameters:
+//   host: host address which will be redirected to
+//   method: the full RPC method string, i.e., /package.service/method.
+//   returnedType: type of returned value
+//   in: value of input (in request) parameter
+// this method returns output just like a normal GRPC call
+func (me *Worker) forward(host, method string, returnedType reflect.Type, ctx context.Context, in interface{}) (interface{}, error) {
+
+	// use cache host connection or create a new one
+	me.dialMutex.Lock()
+	cc, ok := me.conn[host]
+	if !ok {
+		var err error
+		cc, err = dialGrpc(host)
+		if err != nil {
+			me.dialMutex.Unlock()
+			return nil, err
+		}
+		me.conn[host] = cc
+		me.dialMutex.Unlock()
+	}
+
 	md, _ := metadata.FromIncomingContext(ctx)
 	outctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	out := reflect.New(outType[serverinfo.FullMethod]).Interface()
-
+	out := reflect.New(returnedType).Interface()
 	var header, trailer metadata.MD
-	err := cc.Invoke(outctx, serverinfo.FullMethod, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
+	err := cc.Invoke(outctx, method, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
 	grpc.SendHeader(ctx, header)
 	grpc.SetTrailer(ctx, trailer)
 
 	return out, err
+}
+
+// dialGrpc makes a GRPC connection to service
+func dialGrpc(service string) (*grpc.ClientConn, error) {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+	// Enabling WithBlock tells the client to not give up trying to find a server
+	opts = append(opts, grpc.WithBlock())
+	// However, we're still setting a timeout so that if the server takes too long, we still give up
+	opts = append(opts, grpc.WithTimeout(5*time.Second))
+	opts = append(opts, grpc.WithBalancerName(roundrobin.Name))
+	return grpc.Dial(service, opts...)
 }
