@@ -50,6 +50,10 @@
   name = "github.com/subiz/header"
 
 [[constraint]]
+  name = "github.com/thanhpk/randstr"
+  version = "1.0.3"
+
+[[constraint]]
   name = "github.com/urfave/cli"
   version = "1.20.0"
 

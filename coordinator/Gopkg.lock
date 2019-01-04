@@ -142,11 +142,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:06c7f82e2d4d12525638bfe5118ae3e0dbd14edee36c244a2ffd42f0ea76ac06"
+  digest = "1:0fb081d33331382b658db112840617690a0e79053a2ba5157df7b17e773aefcc"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "4f34280ea5501be6d237dd7d8ed7b792b3c913c5"
+  revision = "959dafbc9fac2dad0cd3bff2acd28876943ce3c8"
 
 [[projects]]
   branch = "master"
@@ -170,7 +170,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4494192dd581cb9daa109430fa91aa014672b95c83ace5334a5ac01350ee281f"
+  digest = "1:0fa0e483cd178023d7ab445466baa18d7536938b7805e5a125103d6178bfc872"
   name = "github.com/subiz/header"
   packages = [
     "auth",
@@ -179,7 +179,7 @@
     "partitioner",
   ]
   pruneopts = "UT"
-  revision = "2db0a89eb268868114f64b0918c28a499d9b8e29"
+  revision = "d893d9712f8bceb5e0489e36792dfff54abc578c"
 
 [[projects]]
   branch = "master"
@@ -196,6 +196,14 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "cd2369591cd398dab1f23ee9f2c05de00c88b36f"
+
+[[projects]]
+  digest = "1:478ac646b8363972530772c831de209d07e40122735c099f2d04217e744b120d"
+  name = "github.com/thanhpk/randstr"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ac5b2d62bffbc6bd4d35a03d99dda19e93dc7c9f"
+  version = "1.0.3"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -318,6 +326,7 @@
     "github.com/subiz/errors",
     "github.com/subiz/goutils/log",
     "github.com/subiz/header/partitioner",
+    "github.com/thanhpk/randstr",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
   ]
