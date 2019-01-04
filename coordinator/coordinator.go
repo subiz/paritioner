@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/proto"
-"fmt"
 	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
 	"sync"
@@ -51,15 +51,18 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
 	if version != me.config.Version {
-		return errors.New(400, errors.E_invalid_partition_version, "only support version "+me.config.Version)
+		return errors.New(400, errors.E_invalid_partition_version,
+			"only support version "+me.config.Version)
 	}
 
 	if cluster != me.config.Cluster {
-		return errors.New(400, errors.E_invalid_partition_cluster, "cluster should be "+me.config.Cluster+" not "+cluster)
+		return errors.New(400, errors.E_invalid_partition_cluster,
+			"cluster should be "+me.config.Cluster+" not "+cluster)
 	}
 
 	if term < me.config.Term {
-		return errors.New(400, errors.E_invalid_partition_term, "term should be %d, not %d", me.config.Term, term)
+		return errors.New(400, errors.E_invalid_partition_term,
+			"term should be %d, not %d", me.config.Term, term)
 	}
 	return nil
 }
@@ -133,7 +136,7 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 				return nil
 			}
 		case <-ticker.C:
-			return errors.New(500, errors.E_partition_transaction_timeout)
+			return errors.New(500, errors.E_partition_rebalance_timeout)
 		}
 	}
 }
