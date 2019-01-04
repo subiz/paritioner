@@ -110,10 +110,8 @@ func safe(f func()) {
 	}()
 }
 
-func (me *Server) Accept(workerid string, term int32) { me.voteMgr.Vote(workerid, term, true) }
+func (me *Server) Vote(workerid string, term int32, accept bool) { me.voteMgr.Vote(workerid, term, accept) }
 
-func (me *Server) Deny(workerid string, term int32) { me.voteMgr.Vote(workerid, term, false) }
-
-func (me *Server) Rebalance(workerid string, stream pb.Coordinator_RebalanceServer) {
+func (me *Server) Pull(workerid string, stream pb.Coordinator_RebalanceServer) {
 	me.connMgr.Pull(workerid, stream)
 }

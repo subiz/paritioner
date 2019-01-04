@@ -63,7 +63,7 @@ func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_Rebalance
 	if server == nil {
 		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.Rebalance(wid.GetId(), stream)
+	server.Pull(wid.GetId(), stream)
 	return nil
 }
 
@@ -72,7 +72,7 @@ func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, e
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.Accept(wid.GetId(), wid.GetTerm())
+	server.Vote(wid.GetId(), wid.GetTerm(), true)
 	return &pb.Empty{}, nil
 }
 
@@ -81,7 +81,7 @@ func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, err
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.Deny(wid.GetId(), wid.GetTerm())
+	server.Vote(wid.GetId(), wid.GetTerm(), false)
 	return &pb.Empty{}, nil
 }
 
