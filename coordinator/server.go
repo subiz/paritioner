@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/subiz/errors"
 	"github.com/subiz/goutils/log"
@@ -14,28 +13,24 @@ import (
 
 type Server struct {
 	*sync.Mutex
-	coor        *Coor
-	dialLock    *sync.Mutex
-	db          *DB
-	kubeservice string
-	hosts       map[string]string
-	workers     map[string]pb.WorkerClient
-	cluster     string
+	coor    *Coor
+	db      *DB
+	cluster string
+	mapLock *sync.Mutex
+	connMgr *ConnMgr
+	voteMgr *VoteMgr
+}
+
+type workerVote struct {
+	term     int32
+	voteChan chan bool
 }
 
 func NewServer(kubeservice string, db *DB) *Server {
-	s := &Server{Mutex: &sync.Mutex{}}
-	s.kubeservice = kubeservice
-	s.cluster = kubeservice
-	s.dialLock = &sync.Mutex{}
-	s.db = db
-	s.workers = make(map[string]pb.WorkerClient)
+	s := &Server{Mutex: &sync.Mutex{}, cluster: kubeservice, db: db, mapLock: &sync.Mutex{}}
+	s.connMgr = NewConnMgr()
+	s.voteMgr = NewVoteMgr()
 	s.coor = NewCoordinator(kubeservice, db, s)
-	var err error
-	s.hosts, err = db.LoadHosts(kubeservice)
-	if err != nil {
-		panic(err)
-	}
 	go s.lookupDNS()
 	return s
 }
@@ -47,7 +42,16 @@ func (me *Server) lookupDNS() {
 			defer me.Unlock()
 
 			defer func() { recover() }()
-			ips, err := net.LookupIP(me.kubeservice)
+
+			_, addrs, err := net.LookupSRV("", "", me.cluster)
+			for _, record := range addrs {
+				fmt.Printf("Target: %s:%d\n", record.Target, record.Port)
+			}
+			if err != nil {
+				fmt.Printf("Could not get IPs: %v\n", err)
+			}
+
+			ips, err := net.LookupIP(me.cluster)
 			if err != nil {
 				fmt.Printf("Could not get IPs: %v\n", err)
 				return
@@ -71,66 +75,22 @@ func (me *Server) lookupDNS() {
 	}
 }
 
-func (me *Server) Join(id, host string) error {
-	me.Lock()
-	defer me.Unlock()
-
-	if err := me.db.SaveHost(me.cluster, id, host); err != nil {
-		return err
-	}
-	me.hosts[id] = host
-	return nil
-}
-
-func (me *Server) GetConfig() *pb.Configuration {
-	conf := me.coor.GetConfig()
-
-	// refill hosts info since coor only store worker ids
-	hosts := make(map[string]string)
-	me.Lock()
-	for workerid, _ := range conf.GetPartitions() {
-		hosts[workerid] = me.hosts[workerid]
-	}
-	me.Unlock()
-	conf.Hosts = hosts
-	return conf
-}
+func (me *Server) GetConfig() *pb.Configuration { return me.coor.GetConfig() }
 
 func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
-	host, ok := me.hosts[workerid]
+	conn, ok := me.connMgr.Get(workerid)
 	if !ok {
-		return errors.New(500, errors.E_partition_node_have_not_joined_the_cluster, workerid)
+		return errors.New(500, errors.E_partition_node_have_not_joined_the_cluster,
+			"worker stream not found", workerid)
 	}
 
-	var err error
-	me.dialLock.Lock()
-	w, ok := me.workers[host]
-	if !ok {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.New(500, errors.E_unknown, r, workerid, host)
-				}
-			}()
-
-			conn, er := dialGrpc(host)
-			if er != nil {
-				err = errors.Wrap(er, 500, errors.E_unknown, workerid, host)
-				return
-			}
-			w = pb.NewWorkerClient(conn)
-			me.workers[host] = w
-		}()
-	}
-	me.dialLock.Unlock()
-	if err != nil {
+	stream := conn.Payload.(pb.Coordinator_RebalanceServer)
+	if err := stream.Send(conf); err != nil {
+		me.connMgr.Remove(conn)
 		return err
 	}
 
-	if _, err := w.Prepare(context.Background(), conf); err != nil {
-		return errors.Wrap(err, 500, errors.E_unknown, workerid, host)
-	}
-	return nil
+	return me.voteMgr.Wait(workerid, conf.GetTerm())
 }
 
 func dialGrpc(service string) (*grpc.ClientConn, error) {
@@ -141,4 +101,19 @@ func dialGrpc(service string) (*grpc.ClientConn, error) {
 	// However, we're still setting a timeout so that if the server takes too long, we still give up
 	opts = append(opts, grpc.WithTimeout(1*time.Second))
 	return grpc.Dial(service, opts...)
+}
+
+func safe(f func()) {
+	func() {
+		defer func() { recover() }()
+		f()
+	}()
+}
+
+func (me *Server) Accept(workerid string, term int32) { me.voteMgr.Vote(workerid, term, true) }
+
+func (me *Server) Deny(workerid string, term int32) { me.voteMgr.Vote(workerid, term, false) }
+
+func (me *Server) Rebalance(workerid string, stream pb.Coordinator_RebalanceServer) {
+	me.connMgr.Pull(workerid, stream)
 }

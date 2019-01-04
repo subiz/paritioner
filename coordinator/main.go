@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/subiz/errors"
 	pb "github.com/subiz/header/partitioner"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
-	"github.com/subiz/errors"
 	"net"
 )
 
@@ -58,20 +58,31 @@ func daemon(ctx *cli.Context) error {
 	return grpcServer.Serve(lis)
 }
 
-func (me *BigServer) Join(ctx context.Context, host *pb.WorkerHost) (*pb.Empty, error) {
-	fmt.Println("got join cluster", host.GetCluster())
-	server := me.serverMap[host.GetCluster()]
-	if server== nil {
-		return nil, errors.New(400, errors.E_unknown, "cluster not found", host.GetCluster())
+func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	if host.GetHost() == "" {
-		return nil, errors.New(400, errors.E_unknown, "empty host")
+	server.Rebalance(wid.GetId(), stream)
+	return nil
+}
+
+func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	if host.GetId() == "" {
-		return nil, errors.New(400, errors.E_unknown, "empty id")
+	server.Accept(wid.GetId(), wid.GetTerm())
+	return &pb.Empty{}, nil
+}
+
+func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	err := server.Join(host.GetId(), host.GetHost())
-	return &pb.Empty{}, err
+	server.Deny(wid.GetId(), wid.GetTerm())
+	return &pb.Empty{}, nil
 }
 
 func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
