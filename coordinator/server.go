@@ -1,49 +1,105 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/subiz/errors"
 	"github.com/subiz/goutils/log"
 	pb "github.com/subiz/header/partitioner"
+	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 	"net"
-	"sync"
 	"time"
 )
 
-type Server struct {
-	*sync.Mutex
+type server struct {
 	coor    *Coor
-	db      *DB
 	cluster string
-	mapLock *sync.Mutex
 	connMgr *ConnMgr
 	voteMgr *VoteMgr
 }
 
-type workerVote struct {
-	term     int32
-	voteChan chan bool
+type BigServer struct {
+	serverMap map[string]*server
 }
 
-func NewServer(kubeservice string, db *DB) *Server {
-	s := &Server{Mutex: &sync.Mutex{}, cluster: kubeservice, db: db, mapLock: &sync.Mutex{}}
-	s.connMgr = NewConnMgr()
-	s.voteMgr = NewVoteMgr()
-	s.coor = NewCoordinator(kubeservice, db, s)
-	go s.lookupDNS()
-	return s
+func daemon(ctx *cli.Context) error {
+	db := NewDB(c.CassandraSeeds)
+	bigServer := &BigServer{}
+	bigServer.serverMap = make(map[string]*server)
+	for _, service := range c.Services {
+		s := &server{
+			cluster: service,
+			connMgr: NewConnMgr(),
+			voteMgr: NewVoteMgr(),
+			coor:    NewCoordinator(service, db, bigServer),
+		}
+		bigServer.serverMap[service] = s
+		go lookupDNS(s)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterCoordinatorServer(grpcServer, bigServer)
+
+	lis, err := net.Listen("tcp", ":"+c.Port)
+	if err != nil {
+		return err
+	}
+
+	return grpcServer.Serve(lis)
 }
 
-func (me *Server) lookupDNS() {
+func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+	}
+	server.connMgr.Pull(wid.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
+	return nil
+}
+
+func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+	}
+	server.voteMgr.Vote(wid.GetId(), wid.GetTerm(), true)
+	return &pb.Empty{}, nil
+}
+
+func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+	server := me.serverMap[wid.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+	}
+	server.voteMgr.Vote(wid.GetId(), wid.GetTerm(), false)
+	return &pb.Empty{}, nil
+}
+
+func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
+	server := me.serverMap[cluster.GetId()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", cluster.GetId())
+	}
+	return server.coor.GetConfig(), nil
+}
+
+func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) error {
+	server := me.serverMap[cluster]
+	if server == nil {
+		return errors.New(400, errors.E_unknown, "cluster not found", cluster)
+	}
+
+	if err := server.connMgr.Send(workerid, conf); err != nil {
+		return err
+	}
+	return server.voteMgr.Wait(workerid, conf.GetTerm())
+}
+
+func lookupDNS(s *server) {
 	for {
-		func() {
-			me.Lock()
-			defer me.Unlock()
-
-			defer func() { recover() }()
-
-			_, addrs, err := net.LookupSRV("", "", me.cluster)
+		safe(func() {
+			_, addrs, err := net.LookupSRV("", "", s.cluster)
 			for _, record := range addrs {
 				fmt.Printf("Target: %s:%d\n", record.Target, record.Port)
 			}
@@ -51,67 +107,26 @@ func (me *Server) lookupDNS() {
 				fmt.Printf("Could not get IPs: %v\n", err)
 			}
 
-			ips, err := net.LookupIP(me.cluster)
+			ips, err := net.LookupIP(s.cluster)
 			if err != nil {
 				fmt.Printf("Could not get IPs: %v\n", err)
 				return
 			}
 
 			fmt.Println("looking up dns, got", ips)
-			conf := me.coor.GetConfig()
+			conf := s.coor.GetConfig()
 			if len(ips) == len(conf.GetPartitions()) { // no change
 				return
 			}
 			workers := make([]string, 0)
 			for i := 0; i < len(ips); i++ {
-				workers = append(workers, fmt.Sprintf("%s-%d", me.cluster, i))
+				workers = append(workers, fmt.Sprintf("%s-%d", s.cluster, i))
 			}
-			if err := me.coor.ChangeWorkers(workers); err != nil {
+			if err := s.coor.ChangeWorkers(workers); err != nil {
 				log.Error(err)
 				return
 			}
-		}()
+		})
 		time.Sleep(2 * time.Second)
 	}
-}
-
-func (me *Server) GetConfig() *pb.Configuration { return me.coor.GetConfig() }
-
-func (me *Server) Prepare(workerid string, conf *pb.Configuration) error {
-	conn, ok := me.connMgr.Get(workerid)
-	if !ok {
-		return errors.New(500, errors.E_partition_node_have_not_joined_the_cluster,
-			"worker stream not found", workerid)
-	}
-
-	stream := conn.Payload.(pb.Coordinator_RebalanceServer)
-	if err := stream.Send(conf); err != nil {
-		me.connMgr.Remove(conn)
-		return err
-	}
-
-	return me.voteMgr.Wait(workerid, conf.GetTerm())
-}
-
-func dialGrpc(service string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	// Enabling WithBlock tells the client to not give up trying to find a server
-	opts = append(opts, grpc.WithBlock())
-	// However, we're still setting a timeout so that if the server takes too long, we still give up
-	opts = append(opts, grpc.WithTimeout(1*time.Second))
-	return grpc.Dial(service, opts...)
-}
-
-func safe(f func()) {
-	func() {
-		defer func() { recover() }()
-		f()
-	}()
-}
-
-func (me *Server) Vote(workerid string, term int32, accept bool) { me.voteMgr.Vote(workerid, term, accept) }
-
-func (me *Server) Pull(workerid string, stream pb.Coordinator_RebalanceServer) {
-	me.connMgr.Pull(workerid, stream)
 }

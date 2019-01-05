@@ -1,9 +1,14 @@
 package main
 
 import (
+		"github.com/subiz/errors"
 	"github.com/thanhpk/randstr"
 	"sync"
 )
+
+type Stream interface {
+	SendMsg(m interface{}) error
+}
 
 // ConnMgr manages worker long polling connections
 // for each worker, user uses Pull method to maintaing the pulling
@@ -14,14 +19,14 @@ type ConnMgr struct {
 	// holds all connections inside a map
 	// key of the map is ID of worker, value of the map is the connection
 	// details
-	pulls map[string]WorkerConn
+	pulls map[string]workerConn
 }
 
 // WorkerConn represences a connection made from worker to coordinator
-type WorkerConn struct {
+type workerConn struct {
 	// Payload is used to hold arbitrary data which user want to attach
 	// to this worker
-	Payload interface{}
+	stream Stream
 
 	// an unique string to differentiate  multiple connections of a worker
 	conn_id string
@@ -31,11 +36,13 @@ type WorkerConn struct {
 
 	// a channel to remotely unhalt the blocking worker.Pull method
 	exitc chan bool
+
+	pingPayload interface{}
 }
 
 // NewConnMgr creates a new ConnMgr object
 func NewConnMgr() *ConnMgr {
-	return &ConnMgr{Mutex: &sync.Mutex{}, pulls: make(map[string]WorkerConn)}
+	return &ConnMgr{Mutex: &sync.Mutex{}, pulls: make(map[string]workerConn)}
 }
 
 // Pull adds new connection to manager.
@@ -47,7 +54,10 @@ func NewConnMgr() *ConnMgr {
 // only keep the last one. It makes sure that in anytime, there are atmost one
 // long pulling request for a worker.
 // The execution can also be unblock by calling Remove
-func (me *ConnMgr) Pull(workerid string, payload interface{}) {
+// pull exits when:
+// - stream broke
+// - client canceled
+func (me *ConnMgr) Pull(workerid string, stream Stream, pingPayload interface{}) {
 	me.Lock()
 
 	// droping the last long pulling request if existed
@@ -59,11 +69,12 @@ func (me *ConnMgr) Pull(workerid string, payload interface{}) {
 	}
 
 	c := make(chan bool)
-	me.pulls[workerid] = WorkerConn{
+	me.pulls[workerid] = workerConn{
 		conn_id:   randstr.Hex(16),
 		worker_id: workerid,
-		Payload:   payload,
+		stream: stream,
 		exitc:     c,
+		pingPayload: pingPayload,
 	}
 	me.Unlock()
 	// block until channel is closed
@@ -71,22 +82,13 @@ func (me *ConnMgr) Pull(workerid string, payload interface{}) {
 	<-c
 }
 
-// Get lookups worker connection details by ID
-func (me *ConnMgr) Get(workerid string) (conn WorkerConn, ok bool) {
-	me.Lock()
-	defer me.Unlock()
-	c, ok := me.pulls[workerid]
-	return c, ok
-}
-
 // Remove drops worker connection and it's pulling
 // worker can make multiples connections, but the manager only keep
 // the last one and dropped all others connections. Any attempt to
 // delete previous connection is considered outdated and will be ignore
-func (me *ConnMgr) Remove(conn WorkerConn) {
+func (me *ConnMgr) remove(conn workerConn) {
 	me.Lock()
 	defer me.Unlock()
-
 	oldconn, ok := me.pulls[conn.worker_id]
 	if !ok { // already deleted
 		return
@@ -100,4 +102,28 @@ func (me *ConnMgr) Remove(conn WorkerConn) {
 	// closing exitc to unblock the execution, let the pulling die
 	safe(func() { close(conn.exitc) })
 	delete(me.pulls, conn.worker_id)
+}
+
+func (me *ConnMgr) Send(workerid string, msg interface{}) error {
+	me.Lock()
+	conn, ok := me.pulls[workerid]
+	me.Unlock()
+
+	if !ok {
+		return errors.New(500, errors.E_partition_node_have_not_joined_the_cluster,
+			"worker stream not found", workerid)
+	}
+
+	if err := conn.stream.SendMsg(msg); err != nil {
+		me.remove(conn)
+		return err
+	}
+	return nil
+}
+
+func safe(f func()) {
+	func() {
+		defer func() { recover() }()
+		f()
+	}()
 }

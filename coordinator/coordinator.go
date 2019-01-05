@@ -19,7 +19,7 @@ type Coor struct {
 
 // Workers communator, used to send signal (message) to workers
 type WorkerComm interface {
-	Prepare(id string, conf *pb.Configuration) error
+	Prepare(cluster, workerid string, conf *pb.Configuration) error
 }
 
 func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
@@ -114,7 +114,7 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 	responseC := make(chan error)
 	for _, id := range newWorkers {
 		go func(id string) {
-			responseC <- me.workerComm.Prepare(id, newConfig)
+			responseC <- me.workerComm.Prepare(me.config.Cluster, id, newConfig)
 		}(id)
 	}
 
