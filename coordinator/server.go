@@ -74,7 +74,7 @@ func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, e
 	}
 
 	chanid := makeChanId(wid.GetId(), wid.GetTerm())
-	server.chans.Send(chanid, vote{term: wid.GetTerm(), accept: true})
+	server.chans.Send(chanid, vote{term: wid.Term, accept: true}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
 
@@ -85,7 +85,7 @@ func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, err
 	}
 
 	chanid := makeChanId(wid.GetId(), wid.GetTerm())
-	server.chans.Send(chanid, vote{term: wid.GetTerm(), accept: false})
+	server.chans.Send(chanid, vote{term: wid.Term, accept: false}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
 
@@ -108,7 +108,7 @@ func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) e
 	}
 	chanid := makeChanId(workerid, conf.GetTerm())
 	for {
-		msg, err := server.chans.Recv(chanid)
+		msg, err := server.chans.Recv(chanid, 0)
 		if err != nil {
 			return err // errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
 		}
@@ -122,6 +122,11 @@ func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) e
 		}
 		return errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
 	}
+}
+
+func safe(f func()) {
+	defer func() { recover() }()
+	f()
 }
 
 func lookupDNS(s *server) {

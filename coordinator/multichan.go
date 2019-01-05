@@ -8,68 +8,74 @@ import (
 
 type MultiChan struct {
 	*sync.Mutex
-	chans map[string]chan interface{}
-}
-
-func (me *MultiChan) Send(chanid string, msg interface{}) {
-	me.Lock()
-
-	ch, ok := me.chans[chanid]
-	if !ok { // no election to vote
-		me.Unlock()
-		return
-	}
-
-	me.Unlock()
-
-	// send in channel with timeout, avoiding gorotine wasting
-	// we have to force close the channel in order to break send operation
-	done := make(chan bool)
-	go safe(func() {
-		ch <- msg
-		done <- true
-	})
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		safe(func() {
-			close(ch)
-			close(done)
-		})
-	}
+	chans        map[string]chan interface{}
+	lastModifies map[string]int64
 }
 
 func NewMultiChan() *MultiChan {
-	return &MultiChan{Mutex: &sync.Mutex{}, chans: make(map[string]chan interface{})}
+	m := &MultiChan{
+		Mutex:        &sync.Mutex{},
+		chans:        make(map[string]chan interface{}),
+		lastModifies: make(map[string]int64),
+	}
+	go m.cleanLoop(5 * time.Minute)
+	return m
 }
 
-func (me *MultiChan) Recv(chanid string) (interface{}, error) {
+func (me *MultiChan) Send(chanid string, msg interface{}, timeout time.Duration) error {
 	me.Lock()
-	c, ok := me.chans[chanid]
+	ch, ok := me.chans[chanid]
 	if !ok {
-		c = make(chan interface{})
-		me.chans[chanid] = c
-		me.Unlock()
-		// return nil, errors.New(500, errors.E_unknown) //error.E_duplicated_partition_term, "call wait for vote twice")
+		ch = make(chan interface{})
+		me.chans[chanid] = ch
 	}
+	me.lastModifies[chanid] = time.Now().Unix()
+	me.Unlock()
 
-	defer func() {
-		// clear resource when done, since chan are designed to use one time
-		// only
-		me.Lock()
-		safe(func() { close(c) })
-		delete(me.chans, chanid)
-		me.Unlock()
-	}()
-
-	ticker := time.NewTicker(40 * time.Second)
+	if timeout <= 0 {
+		timeout = 1 * time.Millisecond
+	}
 	select {
-	case msg, more := <-c:
-		if !more {
-			return nil, errors.New(500, errors.E_partition_rebalance_timeout)
-		}
+	case ch <- msg:
+		return nil
+	case <-time.After(timeout):
+		return errors.New(500, errors.E_send_to_channel_timeout, chanid)
+	}
+}
+
+func (me *MultiChan) Recv(chanid string, timeout time.Duration) (interface{}, error) {
+	me.Lock()
+	ch, ok := me.chans[chanid]
+	if !ok {
+		ch = make(chan interface{})
+		me.chans[chanid] = ch
+	}
+	me.lastModifies[chanid] = time.Now().Unix()
+	me.Unlock()
+
+	if timeout <= 0 {
+		timeout = 20 * time.Second
+	}
+	select {
+	case msg := <-ch:
 		return msg, nil
-	case <-ticker.C:
+	case <-time.After(timeout):
 		return nil, errors.New(500, errors.E_partition_rebalance_timeout)
+	}
+}
+
+func (me *MultiChan) cleanLoop(clientinterval time.Duration) {
+	for {
+		me.Lock()
+		for chanid, lm := range me.lastModifies {
+			if time.Since(time.Unix(lm, 0)) < 3*time.Minute {
+				continue
+			}
+
+			delete(me.lastModifies, chanid)
+			delete(me.chans, chanid)
+		}
+		me.Unlock()
+		time.Sleep(clientinterval)
 	}
 }

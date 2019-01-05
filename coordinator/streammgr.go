@@ -60,11 +60,11 @@ func NewStreamMgr() *StreamMgr {
 func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{}) {
 	me.Lock()
 
-	// droping the last long pulling request if existed
+	// dropping the last long pulling request if existed
 	if conn, ok := me.pulls[workerid]; ok {
 		// we blocking the execution by makeing it receive from an empty channel.
 		// By closing the channel, we unblock the execution (so the pulling can die)
-		safe(func() { close(conn.exitc) })
+		conn.exitc <- true
 		delete(me.pulls, workerid)
 	}
 
@@ -77,9 +77,8 @@ func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{
 		pingPayload: pingPayload,
 	}
 	me.Unlock()
-	// block until channel is closed
-	// (no one is going to send to this channel)
-	<-c
+
+	c <- true // block until channel is sent
 }
 
 // Remove drops worker connection and it's pulling
@@ -87,23 +86,22 @@ func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{
 // the last one and dropped all others connections. Any attempt to
 // delete previous connection is considered outdated and will be ignore
 func (me *StreamMgr) remove(conn workerConn) {
-	me.Lock()
-	defer me.Unlock()
 	oldconn, ok := me.pulls[conn.worker_id]
 	if !ok { // already deleted
 		return
 	}
 
+	// connection is outdated, some one has already closed the connection
 	if oldconn.conn_id != conn.conn_id {
-		// connection is outdated, some one has already closed the connection
 		return
 	}
 
-	// closing exitc to unblock the execution, let the pulling die
-	safe(func() { close(conn.exitc) })
+	// recving from exitc to unblock the execution, releasing the poll
+	<-conn.exitc
 	delete(me.pulls, conn.worker_id)
 }
 
+// Send sends msg to worker's stream
 func (me *StreamMgr) Send(workerid string, msg interface{}) error {
 	me.Lock()
 	conn, ok := me.pulls[workerid]
@@ -119,11 +117,4 @@ func (me *StreamMgr) Send(workerid string, msg interface{}) error {
 		return err
 	}
 	return nil
-}
-
-func safe(f func()) {
-	func() {
-		defer func() { recover() }()
-		f()
-	}()
 }
