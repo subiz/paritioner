@@ -1,7 +1,7 @@
 package main
 
 import (
-		"github.com/subiz/errors"
+	"github.com/subiz/errors"
 	"github.com/thanhpk/randstr"
 	"sync"
 )
@@ -10,10 +10,10 @@ type Stream interface {
 	SendMsg(m interface{}) error
 }
 
-// ConnMgr manages worker long polling connections
+// StreamMgr manages worker long polling connections
 // for each worker, user uses Pull method to maintaing the pulling
 // after worker leave, user should call Remove to clean up the resource
-type ConnMgr struct {
+type StreamMgr struct {
 	*sync.Mutex
 
 	// holds all connections inside a map
@@ -40,9 +40,9 @@ type workerConn struct {
 	pingPayload interface{}
 }
 
-// NewConnMgr creates a new ConnMgr object
-func NewConnMgr() *ConnMgr {
-	return &ConnMgr{Mutex: &sync.Mutex{}, pulls: make(map[string]workerConn)}
+// NewStreamMgr creates a new StreamMgr object
+func NewStreamMgr() *StreamMgr {
+	return &StreamMgr{Mutex: &sync.Mutex{}, pulls: make(map[string]workerConn)}
 }
 
 // Pull adds new connection to manager.
@@ -57,7 +57,7 @@ func NewConnMgr() *ConnMgr {
 // pull exits when:
 // - stream broke
 // - client canceled
-func (me *ConnMgr) Pull(workerid string, stream Stream, pingPayload interface{}) {
+func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{}) {
 	me.Lock()
 
 	// droping the last long pulling request if existed
@@ -70,10 +70,10 @@ func (me *ConnMgr) Pull(workerid string, stream Stream, pingPayload interface{})
 
 	c := make(chan bool)
 	me.pulls[workerid] = workerConn{
-		conn_id:   randstr.Hex(16),
-		worker_id: workerid,
-		stream: stream,
-		exitc:     c,
+		conn_id:     randstr.Hex(16),
+		worker_id:   workerid,
+		stream:      stream,
+		exitc:       c,
 		pingPayload: pingPayload,
 	}
 	me.Unlock()
@@ -86,7 +86,7 @@ func (me *ConnMgr) Pull(workerid string, stream Stream, pingPayload interface{})
 // worker can make multiples connections, but the manager only keep
 // the last one and dropped all others connections. Any attempt to
 // delete previous connection is considered outdated and will be ignore
-func (me *ConnMgr) remove(conn workerConn) {
+func (me *StreamMgr) remove(conn workerConn) {
 	me.Lock()
 	defer me.Unlock()
 	oldconn, ok := me.pulls[conn.worker_id]
@@ -104,7 +104,7 @@ func (me *ConnMgr) remove(conn workerConn) {
 	delete(me.pulls, conn.worker_id)
 }
 
-func (me *ConnMgr) Send(workerid string, msg interface{}) error {
+func (me *StreamMgr) Send(workerid string, msg interface{}) error {
 	me.Lock()
 	conn, ok := me.pulls[workerid]
 	me.Unlock()

@@ -13,10 +13,10 @@ import (
 )
 
 type server struct {
-	coor    *Coor
-	cluster string
-	connMgr *ConnMgr
-	voteMgr *VoteMgr
+	coor      *Coor
+	cluster   string
+	streamMgr *StreamMgr
+	chans     *MultiChan
 }
 
 type BigServer struct {
@@ -29,10 +29,10 @@ func daemon(ctx *cli.Context) error {
 	bigServer.serverMap = make(map[string]*server)
 	for _, service := range c.Services {
 		s := &server{
-			cluster: service,
-			connMgr: NewConnMgr(),
-			voteMgr: NewVoteMgr(),
-			coor:    NewCoordinator(service, db, bigServer),
+			cluster:   service,
+			streamMgr: NewStreamMgr(),
+			chans:     NewMultiChan(),
+			coor:      NewCoordinator(service, db, bigServer),
 		}
 		bigServer.serverMap[service] = s
 		go lookupDNS(s)
@@ -49,12 +49,21 @@ func daemon(ctx *cli.Context) error {
 	return grpcServer.Serve(lis)
 }
 
+type vote struct {
+	term   int32
+	accept bool
+}
+
+func makeChanId(workerid string, term int32) string {
+	return fmt.Sprintf("%s|%d", workerid, term)
+}
+
 func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
 	server := me.serverMap[wid.GetCluster()]
 	if server == nil {
 		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.connMgr.Pull(wid.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
+	server.streamMgr.Pull(wid.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
 	return nil
 }
 
@@ -63,7 +72,9 @@ func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, e
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.voteMgr.Vote(wid.GetId(), wid.GetTerm(), true)
+
+	chanid := makeChanId(wid.GetId(), wid.GetTerm())
+	server.chans.Send(chanid, vote{term: wid.GetTerm(), accept: true})
 	return &pb.Empty{}, nil
 }
 
@@ -72,7 +83,9 @@ func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, err
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
 	}
-	server.voteMgr.Vote(wid.GetId(), wid.GetTerm(), false)
+
+	chanid := makeChanId(wid.GetId(), wid.GetTerm())
+	server.chans.Send(chanid, vote{term: wid.GetTerm(), accept: false})
 	return &pb.Empty{}, nil
 }
 
@@ -90,10 +103,25 @@ func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) e
 		return errors.New(400, errors.E_unknown, "cluster not found", cluster)
 	}
 
-	if err := server.connMgr.Send(workerid, conf); err != nil {
+	if err := server.streamMgr.Send(workerid, conf); err != nil {
 		return err
 	}
-	return server.voteMgr.Wait(workerid, conf.GetTerm())
+	chanid := makeChanId(workerid, conf.GetTerm())
+	for {
+		msg, err := server.chans.Recv(chanid)
+		if err != nil {
+			return err // errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
+		}
+		vote := msg.(vote)
+		if vote.term < conf.Term { // ignore outdated answer
+			continue
+		}
+
+		if vote.accept {
+			return nil
+		}
+		return errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
+	}
 }
 
 func lookupDNS(s *server) {

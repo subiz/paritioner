@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/urfave/cli"
 )
@@ -18,12 +17,6 @@ func main() {
 	envconfig.MustProcess("coor", &c)
 	app := cli.NewApp()
 	app.Name = "coordinator"
-
-	app.Action = func(c *cli.Context) error {
-		fmt.Println("hello from partition coordinator")
-		return nil
-	}
-
 	app.Commands = []cli.Command{
 		{Name: "daemon", Usage: "run server", Action: daemon},
 	}

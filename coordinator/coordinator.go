@@ -113,13 +113,12 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 
 	responseC := make(chan error)
 	for _, id := range newWorkers {
-		go func(id string) {
-			responseC <- me.workerComm.Prepare(me.config.Cluster, id, newConfig)
-		}(id)
+		go func(id string) { safe(func() { responseC <- me.workerComm.Prepare(me.config.Cluster, id, newConfig) }) }(id)
 	}
 
 	ticker := time.NewTicker(40 * time.Second)
 	numVotes := 0
+	defer safe(func() { close(responseC) })
 	for {
 		select {
 		case err := <-responseC:
