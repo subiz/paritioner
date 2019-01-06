@@ -8,149 +8,66 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
-	"hash/fnv"
-	"math/rand"
-	"strings"
 	"sync"
 	"time"
 )
 
-const (
-	// GRPC Metadata key to store partition key attached to each GRPC request
-	// the key will be hashed to find the correct worker that handle the request
-	PartitionKey = "partitionkey"
-
-	// Name is the name of partitioner balancer.
-	Name = "partitioner"
-)
-
-// global hashing util, used to hash key to partition number
-var ghash = fnv.New32a()
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	balancer.Register(&parBuilder{name: Name})
-}
-
-func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
-
-type parPicker struct {
-	*sync.Mutex
-	partitions []string
-	subConns   map[string]balancer.SubConn
-}
-
-func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn) {
-	me.Lock()
-	defer me.Unlock()
-	fmt.Printf("partitionerPicker: newPicker called with readySCs: %v\n", pars)
-
-	// copy subConns
-	me.subConns = make(map[string]balancer.SubConn)
-	for host, sc := range subConns {
-		me.subConns[host] = sc
-	}
-
-	me.partitions = pars
-}
-
-// We find worker host by hashing partition key to a partition number then
-// look it up in the current partition map
-// worker host might not be the correct one since partition map can be
-// unsynchronized (by network lantences or network partitioned). When it
-// happend, request will be redirected one or more times in worker side till
-// it arrive the correct host. This may look ineffiecient but we don't have to
-// guarrantee consistent at client-side, make client-side code so much simpler
-// when the  network is stable and no worker member changes (most of the time),
-// partition map is in-sync, clients are now sending requests directly to the
-// correct host without making any additional redirection.
-func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	if len(me.subConns) <= 0 {
-		return nil, nil, balancer.ErrNoSubConnAvailable
-	}
-
-	md, _ := metadata.FromOutgoingContext(ctx)
-	pkey := strings.Join(md[PartitionKey], "")
-
-	if pkey == "" { // random host
-		pkey = fmt.Sprintf("%d", rand.Int())
-	}
-
-	// hashing key to find the partition number
-	ghash.Write([]byte(pkey))
-	par := ghash.Sum32() % uint32(len(me.partitions))
-	ghash.Reset()
-
-	me.Lock()
-	sc := me.subConns[me.partitions[par]]
-	me.Unlock()
-	if sc == nil {
-		return nil, nil, balancer.ErrNoSubConnAvailable
-	}
-	return sc, nil, nil
-}
-
-type parBuilder struct {
-	name string
-}
-
-func (me *parBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	return &parBalancer{
-		Mutex:    &sync.Mutex{},
-		cc:       cc,
-		subConns: make(map[string]balancer.SubConn),
-		picker:   NewParPicker(),
-	}
-}
-
-func (me *parBuilder) Name() string { return me.name }
-
-// partitioner balancer
+// parBalancer is shorten for partitioner balancer
 type parBalancer struct {
 	*sync.Mutex
 	cc balancer.ClientConn
 
+	// subConn for each host
 	subConns map[string]balancer.SubConn
 
-	picker     balancer.Picker
-	conn       map[string]*grpc.ClientConn
+	picker balancer.Picker
+
+	// partition map
 	partitions []string
 
-	// tells that fetchLoop is running or not
+	// use to make sure we only running fetching loop once
 	fetching bool
 }
 
 // fetchLoop synchronizes partition in every 30 sec
-func (me *parBalancer) fetchLoop(service string) {
+//
+func (me *parBalancer) fetchLoop(addr string) {
+	// loop once only
+	me.Lock()
 	if me.fetching {
+		me.Unlock()
 		return
 	}
-
 	me.fetching = true
-	pconn, err := dialGrpc(service)
-	if err != nil {
-		panic(err)
-	}
+	me.Unlock()
 
+	// trying to connect to a worker
+	var pconn *grpc.ClientConn
+	for {
+		var err error
+		pconn, err = dialGrpc(addr)
+		if err != nil {
+			fmt.Printf("ERR LKJSDLFKJ49FD cannot connect to addr %s, %v\n", addr, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
 	pclient := pb.NewWorkerClient(pconn)
-	// update cluster state every 30s
+
+	// main loop
 	for {
 		pars, err := fetchPartitions(pclient)
 		if err != nil {
 			fmt.Printf("ERR#FS94GPOFD fetching partition: %v\n", err)
 		}
 
-		if len(pars) == 0 {
-			continue
-		}
-
+		// making array of hosts using partition map
 		hostM := make(map[string]bool, 0)
 		for _, host := range pars {
 			hostM[host] = true
 		}
-
 		hosts := make([]string, 0)
 		for host := range hostM {
 			hosts = append(hosts, host)
@@ -178,14 +95,13 @@ func (me *parBalancer) fetchLoop(service string) {
 			if _, ok := addrsSet[h]; !ok {
 				me.cc.RemoveSubConn(sc)
 				delete(me.subConns, h)
-				// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
-				// The entry will be deleted in HandleSubConnStateChange.
 			}
 		}
 
 		me.Lock()
 		me.partitions = pars
 		me.Unlock()
+
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -197,8 +113,9 @@ func (me *parBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 		return
 	}
 
-	a := addrs[0]
-	me.fetchLoop(a.Addr)
+	// use first address only, the rest of cluster will be discover through
+	// this address
+	me.fetchLoop(addrs[0].Addr)
 }
 
 // also ignore since we have our own implementation
@@ -248,12 +165,11 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 	return partitions, nil
 }
 
-func dialGrpc(service string) (*grpc.ClientConn, error) {
+// dialGRPC makes a connection to GRPC addr (e.g: grpc.subiz.com:8080)
+func dialGrpc(addr string) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
-	// Enabling WithBlock tells the client to not give up trying to find a server
 	opts = append(opts, grpc.WithBlock())
-	// However, we're still setting a timeout so that if the server takes too long, we still give up
 	opts = append(opts, grpc.WithTimeout(2*time.Second))
-	return grpc.Dial(service, opts...)
+	return grpc.Dial(addr, opts...)
 }
