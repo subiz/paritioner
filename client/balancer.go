@@ -10,14 +10,24 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"hash/fnv"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Name is the name of partitioner balancer.
-const Name = "partitioner"
+const (
+	// GRPC Metadata key to store partition key attached to each GRPC request
+	// the key will be hashed to find the correct worker that handle the request
+	PartitionKey = "partitionkey"
+
+	// Name is the name of partitioner balancer.
+	Name = "partitioner"
+)
+
+// global hashing util, used to hash key to partition number
+var ghash = fnv.New32a()
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -46,6 +56,16 @@ func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn)
 	me.partitions = pars
 }
 
+// We find worker host by hashing partition key to a partition number then
+// look it up in the current partition map
+// worker host might not be the correct one since partition map can be
+// unsynchronized (by network lantences or network partitioned). When it
+// happend, request will be redirected one or more times in worker side till
+// it arrive the correct host. This may look ineffiecient but we don't have to
+// guarrantee consistent at client-side, make client-side code so much simpler
+// when the  network is stable and no worker member changes (most of the time),
+// partition map is in-sync, clients are now sending requests directly to the
+// correct host without making any additional redirection.
 func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if len(me.subConns) <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
@@ -226,4 +246,14 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 		}
 	}
 	return partitions, nil
+}
+
+func dialGrpc(service string) (*grpc.ClientConn, error) {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+	// Enabling WithBlock tells the client to not give up trying to find a server
+	opts = append(opts, grpc.WithBlock())
+	// However, we're still setting a timeout so that if the server takes too long, we still give up
+	opts = append(opts, grpc.WithTimeout(2*time.Second))
+	return grpc.Dial(service, opts...)
 }
