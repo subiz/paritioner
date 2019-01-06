@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"hash/fnv"
 	"io"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -20,15 +21,15 @@ const (
 	NORMAL  = 1
 
 	PartitionKey = "partitionkey"
-	RedirectKey  = "partitionredirectkey"
 )
 
 // global hashing util, used to hash key to partition number
 var ghash = fnv.New32a()
 
 type partition struct {
-	worker_id string
-	state     int // NORMAL, BLOCKED
+	worker_id   string
+	worker_host string
+	state       int // NORMAL, BLOCKED
 }
 
 type Worker struct {
@@ -40,7 +41,10 @@ type Worker struct {
 	preparing_term int32
 	config         *pb.Configuration
 	coor           pb.CoordinatorClient
+	host           string
 	onUpdates      []func([]int32)
+	conn           map[string]*grpc.ClientConn
+	dialMutex      *sync.Mutex
 }
 
 // NewWorker creates and starts a new Worker object
@@ -52,8 +56,16 @@ type Worker struct {
 //    cluster. E.g: web-1
 //  coordinator: host address of coordinator, used to listen changes
 //    and making transaction. E.g: coordinator:8021
-func NewWorker(cluster, id, coordinator string) *Worker {
-	me := &Worker{Mutex: &sync.Mutex{}, version: "1.0.0", cluster: cluster, id: id}
+func NewWorker(host, cluster, id, coordinator string) *Worker {
+	me := &Worker{
+		Mutex:     &sync.Mutex{},
+		version:   "1.0.0",
+		cluster:   cluster,
+		id:        id,
+		host:      host,
+		conn:      make(map[string]*grpc.ClientConn),
+		dialMutex: &sync.Mutex{},
+	}
 	for {
 		cconn, err := dialGrpc(coordinator)
 		if err != nil {
@@ -85,7 +97,12 @@ func (me *Worker) rebalancePull() {
 	ctx := context.Background()
 	for { // replace to rebalance
 		safe(func() {
-			stream, err := me.coor.Rebalance(ctx, &pb.WorkerID{Cluster: me.cluster, Id: me.id})
+			stream, err := me.coor.Rebalance(ctx, &pb.WorkerHost{
+				Cluster: me.cluster,
+				Id:      me.id,
+				Host:    me.host,
+			})
+
 			if err != nil {
 				fmt.Printf("ERR while joining cluster %v. Retry in 2 secs\n", err)
 				time.Sleep(2 * time.Second)
@@ -107,10 +124,10 @@ func (me *Worker) rebalancePull() {
 
 				err = me.validateRequest(conf.GetVersion(), conf.GetCluster(), conf.GetTerm())
 				if err != nil {
-					me.coor.Deny(ctx, &pb.WorkerID{Cluster: me.cluster, Id: me.id, Term: conf.Term})
+					me.coor.Deny(ctx, &pb.WorkerHost{Cluster: me.cluster, Id: me.id, Term: conf.Term})
 				} else {
 					me.block(conf.GetPartitions())
-					me.coor.Accept(ctx, &pb.WorkerID{Cluster: me.cluster, Id: me.id, Term: conf.Term})
+					me.coor.Accept(ctx, &pb.WorkerHost{Cluster: me.cluster, Id: me.id, Term: conf.Term})
 				}
 				me.fetchConfig()
 				me.notifySubscribers()
@@ -155,7 +172,11 @@ func (me *Worker) fetchConfig() {
 	me.partitions = make([]partition, conf.GetTotalPartitions())
 	for workerid, pars := range conf.GetPartitions() {
 		for _, p := range pars.GetPartitions() {
-			me.partitions[p] = partition{worker_id: workerid, state: NORMAL}
+			me.partitions[p] = partition{
+				worker_id:   workerid,
+				worker_host: conf.Hosts[workerid],
+				state:       NORMAL,
+			}
 		}
 	}
 }
@@ -233,8 +254,42 @@ func (me *Worker) block(partitions map[string]*pb.WorkerPartitions) {
 	}
 }
 
+// analysisReturnType returns all return types for every GRPC method in server handler
+// the returned map takes full method name (i.e., /package.service/method) as key, and the return type as value
+// For example, with handler
+//   (s *server) func Goodbye() string {}
+//   (s *server) func Ping(_ context.Context, _ *pb.Ping) (*pb.Pong, error) {}
+//   (s *server) func Hello(_ context.Context, _ *pb.Empty) (*pb.String, error) {}
+// this function detected 2 GRPC methods is Ping and Hello, it would return
+// {"Ping": *pb.Pong, "Hello": *pb.Empty}
+func analysisReturnType(server interface{}) map[string]reflect.Type {
+	m := make(map[string]reflect.Type)
+	t := reflect.TypeOf(server).Elem()
+	for i := 0; i < t.NumMethod(); i++ {
+		methodType := t.Method(i).Type
+		if methodType.NumOut() != 2 || methodType.NumIn() < 2 {
+			println("skip dd", t.Method(i).Name)
+			continue
+		}
+
+		if methodType.Out(1).Kind() != reflect.Ptr || methodType.Out(1).Name() != "context" {
+			continue
+		}
+
+		if methodType.Out(0).Kind() != reflect.Ptr || methodType.Out(1).Name() != "error" {
+			continue
+		}
+
+		m[t.Method(i).Name] = methodType.Out(0).Elem()
+		//println("d", reflect.New().Interface().(string))
+		//println(t.Method(i).Type.Out(0).Name())
+	}
+	return m
+}
+
 // CreateIntercept makes a new GRPC server interceptor
-func (me *Worker) CreateIntercept() grpc.UnaryServerInterceptor {
+func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
+	returnedTypeM := analysisReturnType(mgr)
 	return func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
 		md, _ := metadata.FromIncomingContext(ctx)
 		pkey := strings.Join(md[PartitionKey], "")
@@ -262,16 +317,43 @@ func (me *Worker) CreateIntercept() grpc.UnaryServerInterceptor {
 		if par.worker_id == me.id { // correct parittion
 			return handler(ctx, in)
 		}
-
-		header, _ := metadata.FromOutgoingContext(ctx)
-		if header == nil {
-			header = metadata.New(nil)
-		}
-		header.Append(RedirectKey, par.worker_id)
-		grpc.SendHeader(ctx, header)
-		return nil, errors.New(400, errors.E_wrong_partition_host,
-			"should be %s, not %s", par.worker_id, me.id)
+		return me.forward(par.worker_host, sinfo.FullMethod, returnedTypeM[sinfo.FullMethod], ctx, in)
 	}
+}
+
+// forward redirects a GRPC calls to another host, header and trailer are preserved
+// parameters:
+//   host: host address which will be redirected to
+//   method: the full RPC method string, i.e., /package.service/method.
+//   returnedType: type of returned value
+//   in: value of input (in request) parameter
+// this method returns output just like a normal GRPC call
+func (me *Worker) forward(host, method string, returnedType reflect.Type, ctx context.Context, in interface{}) (interface{}, error) {
+
+	// use cache host connection or create a new one
+	me.dialMutex.Lock()
+	cc, ok := me.conn[host]
+	if !ok {
+		var err error
+		cc, err = dialGrpc(host)
+		if err != nil {
+			me.dialMutex.Unlock()
+			return nil, err
+		}
+		me.conn[host] = cc
+		me.dialMutex.Unlock()
+	}
+
+	md, _ := metadata.FromIncomingContext(ctx)
+	outctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	out := reflect.New(returnedType).Interface()
+	var header, trailer metadata.MD
+	err := cc.Invoke(outctx, method, in, out, grpc.Header(&header), grpc.Trailer(&trailer))
+	grpc.SendHeader(ctx, header)
+	grpc.SetTrailer(ctx, trailer)
+
+	return out, err
 }
 
 // dialGrpc makes a GRPC connection to service
