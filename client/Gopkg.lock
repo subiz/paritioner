@@ -17,10 +17,9 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:aa3d8d42865c42626b5c1add193692d045b3188b1479f0a0a88690d21fe20083"
+  digest = "1:84a5a2b67486d5d67060ac393aa255d05d24ed5ee41daecd5635ec22657b6492"
   name = "github.com/mailru/easyjson"
   packages = [
-    ".",
     "buffer",
     "jlexer",
     "jwriter",
@@ -30,11 +29,19 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ffcc5d50038aba53d6daab2506fe271590634fd8f278b7fac9e54c032a378f7a"
+  digest = "1:fade3228acf7353e7626c2578ce02fc9c88fd0a3b3b04ec027df996d6c56153d"
+  name = "github.com/subiz/errors"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "99618761420a5bae436ce9ed6ec5ca85c71d9291"
+
+[[projects]]
+  branch = "master"
+  digest = "1:5c9df914738ae506e6d418eca80df587646628dbafdee82c47626246458e949b"
   name = "github.com/subiz/header"
   packages = ["partitioner"]
   pruneopts = "UT"
-  revision = "2db0a89eb268868114f64b0918c28a499d9b8e29"
+  revision = "7a49a820252b6e8c3ef13377cdd4b3cc29dac3d7"
 
 [[projects]]
   branch = "master"
@@ -58,7 +65,7 @@
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "82a175fd1598e8a172e58ebdf5ed262bb29129e5"
+  revision = "badf5585203e739f88c2c6cd34188a6f54b5d619"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -135,9 +142,13 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/subiz/errors",
     "github.com/subiz/header/partitioner",
     "google.golang.org/grpc",
+    "google.golang.org/grpc/balancer",
+    "google.golang.org/grpc/connectivity",
     "google.golang.org/grpc/metadata",
+    "google.golang.org/grpc/resolver",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
