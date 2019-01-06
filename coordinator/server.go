@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+type Server struct {
+	serverMap map[string]*server
+}
+
 type server struct {
 	coor      *Coor
 	cluster   string
@@ -19,13 +23,9 @@ type server struct {
 	chans     *MultiChan
 }
 
-type BigServer struct {
-	serverMap map[string]*server
-}
-
 func daemon(ctx *cli.Context) error {
 	db := NewDB(c.CassandraSeeds)
-	bigServer := &BigServer{}
+	bigServer := &Server{}
 	bigServer.serverMap = make(map[string]*server)
 	for _, service := range c.Services {
 		s := &server{
@@ -58,7 +58,7 @@ func makeChanId(workerid string, term int32) string {
 	return fmt.Sprintf("%s|%d", workerid, term)
 }
 
-func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
+func (me *Server) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
 	server := me.serverMap[wid.GetCluster()]
 	if server == nil {
 		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
@@ -67,7 +67,7 @@ func (me *BigServer) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_Rebalance
 	return nil
 }
 
-func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+func (me *Server) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
 	server := me.serverMap[wid.GetCluster()]
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
@@ -78,7 +78,7 @@ func (me *BigServer) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, e
 	return &pb.Empty{}, nil
 }
 
-func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
+func (me *Server) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
 	server := me.serverMap[wid.GetCluster()]
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
@@ -89,7 +89,7 @@ func (me *BigServer) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, err
 	return &pb.Empty{}, nil
 }
 
-func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
+func (me *Server) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
 	server := me.serverMap[cluster.GetId()]
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", cluster.GetId())
@@ -97,7 +97,7 @@ func (me *BigServer) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Co
 	return server.coor.GetConfig(), nil
 }
 
-func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) error {
+func (me *Server) Prepare(cluster, workerid string, conf *pb.Configuration) error {
 	server := me.serverMap[cluster]
 	if server == nil {
 		return errors.New(400, errors.E_unknown, "cluster not found", cluster)
@@ -110,17 +110,18 @@ func (me *BigServer) Prepare(cluster, workerid string, conf *pb.Configuration) e
 	for {
 		msg, err := server.chans.Recv(chanid, 0)
 		if err != nil {
-			return err // errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
+			return err
 		}
 		vote := msg.(vote)
-		if vote.term < conf.Term { // ignore outdated answer
+		if vote.term == conf.Term { // ignore outdated answer
 			continue
 		}
 
 		if vote.accept {
 			return nil
 		}
-		return errors.New(500, errors.E_partition_rebalance_timeout, "worker donot accept")
+		return errors.New(500, errors.E_partition_rebalance_timeout,
+			"worker donot accept")
 	}
 }
 
