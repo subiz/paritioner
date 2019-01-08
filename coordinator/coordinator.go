@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/subiz/errors"
@@ -15,6 +16,7 @@ type Coor struct {
 	db         *DB
 	config     *pb.Configuration // intermediate configuration, TODO: this never be nil
 	workerComm WorkerComm
+//	hosts      map[string]string
 }
 
 // Workers communator, used to send signal (message) to workers
@@ -49,6 +51,19 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	return me
 }
 
+func (me *Coor) Join(w *pb.WorkerHost) error {
+	me.Lock()
+	defer me.Unlock()
+	if err := me.db.SaveHost(me.config.Cluster, w.GetId(), w.GetHost()); err != nil {
+		return err
+	}
+
+
+
+
+	// me.hosts[id] = host
+}
+
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
 	if version != me.config.Version {
 		return errors.New(400, errors.E_invalid_partition_version,
@@ -73,37 +88,18 @@ func (me *Coor) GetConfig() *pb.Configuration {
 	return me.config
 }
 
-// make sure all other nodes are died
-// this protocol assume that nodes are all nodes that survived
-func (me *Coor) ChangeWorkers(newWorkers []string) error {
+func (me *Coor) transition(newConf *pb.Configuration) error {
 	me.Lock()
 	defer me.Unlock()
 
-	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
-	partitionM := make(map[string][]int32)
-	for workerid, w := range me.config.GetPartitions() {
-		partitionM[workerid] = w.GetPartitions()
+	// ignore no change
+	newb, _ := newConf.MarshalJSON()
+	oldb, _ := me.config.MarshalJSON()
+	if bytes.Compare(newb, oldb) == 0 {
+		return nil
 	}
 
-	if len(partitionM) == 0 {
-		allpars := make([]int32, 0)
-		for i := int32(0); i < me.config.GetTotalPartitions(); i++ {
-			allpars = append(allpars, i)
-		}
-		partitionM["_"] = allpars
-	}
-
-	partitionM = balance(partitionM, newWorkers)
-	newPars := make(map[string]*pb.WorkerPartitions)
-	for id, pars := range partitionM {
-		newPars[id] = &pb.WorkerPartitions{Partitions: pars}
-	}
-
-	newConfig := proto.Clone(me.config).(*pb.Configuration)
-	newConfig.Term = newConfig.NextTerm
-	newConfig.NextTerm++
-	newConfig.Partitions = newPars
-	// newConfig.Hosts = newHosts
+	newConf.Term, newConf.NextTerm = me.config.NextTerm, me.config.NextTerm+1
 
 	// save next term to database
 	me.config.NextTerm++
@@ -114,7 +110,7 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 	responseC := make(chan error)
 	for _, id := range newWorkers {
 		go func(id string) {
-			err := me.workerComm.Prepare(me.config.Cluster, id, newConfig)
+			err := me.workerComm.Prepare(me.config.Cluster, id, newConf)
 			select {
 			case responseC <- err:
 			default:
@@ -143,4 +139,36 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 			return errors.New(500, errors.E_partition_rebalance_timeout)
 		}
 	}
+
+}
+
+// make sure all other nodes are died
+// this protocol assume that nodes are all nodes that survived
+func (me *Coor) ChangeWorkers(newWorkers []string) error {
+
+	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
+	partitionM := make(map[string][]int32)
+	for workerid, w := range me.config.GetPartitions() {
+		partitionM[workerid] = w.GetPartitions()
+	}
+
+	if len(partitionM) == 0 {
+		allpars := make([]int32, 0)
+		for i := int32(0); i < me.config.GetTotalPartitions(); i++ {
+			allpars = append(allpars, i)
+		}
+		partitionM["_"] = allpars
+	}
+
+	partitionM = balance(partitionM, newWorkers)
+	newPars := make(map[string]*pb.WorkerPartitions)
+	for id, pars := range partitionM {
+		newPars[id] = &pb.WorkerPartitions{Partitions: pars}
+	}
+
+	newConfig := proto.Clone(me.config).(*pb.Configuration)
+	newConfig.Partitions = newPars
+	// newConfig.Hosts = newHosts
+	return me.transition(newConfig)
+
 }

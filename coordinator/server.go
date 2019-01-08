@@ -27,6 +27,7 @@ func daemon(ctx *cli.Context) error {
 	db := NewDB(c.CassandraSeeds)
 	bigServer := &Server{}
 	bigServer.serverMap = make(map[string]*server)
+	var err error
 	for _, service := range c.Services {
 		s := &server{
 			cluster:   service,
@@ -58,33 +59,38 @@ func makeChanId(workerid string, term int32) string {
 	return fmt.Sprintf("%s|%d", workerid, term)
 }
 
-func (me *Server) Rebalance(wid *pb.WorkerID, stream pb.Coordinator_RebalanceServer) error {
-	server := me.serverMap[wid.GetCluster()]
+func (me *Server) Rebalance(w *pb.WorkerHost, stream pb.Coordinator_RebalanceServer) error {
+	server := me.serverMap[w.GetCluster()]
 	if server == nil {
-		return errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+		return errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
 	}
-	server.streamMgr.Pull(wid.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
+
+	if err := server.coor.Join(w); err != nil {
+		return err
+	}
+
+	server.streamMgr.Pull(w.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
 	return nil
 }
 
-func (me *Server) Accept(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
-	server := me.serverMap[wid.GetCluster()]
+func (me *Server) Accept(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error) {
+	server := me.serverMap[w.GetCluster()]
 	if server == nil {
-		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
 	}
 
-	chanid := makeChanId(wid.GetId(), wid.GetTerm())
+	chanid := makeChanId(w.GetId(), w.GetTerm())
 	server.chans.Send(chanid, vote{term: wid.Term, accept: true}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
 
-func (me *Server) Deny(ctx context.Context, wid *pb.WorkerID) (*pb.Empty, error) {
-	server := me.serverMap[wid.GetCluster()]
+func (me *Server) Deny(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error) {
+	server := me.serverMap[w.GetCluster()]
 	if server == nil {
-		return nil, errors.New(400, errors.E_unknown, "cluster not found", wid.GetCluster())
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
 	}
 
-	chanid := makeChanId(wid.GetId(), wid.GetTerm())
+	chanid := makeChanId(w.GetId(), w.GetTerm())
 	server.chans.Send(chanid, vote{term: wid.Term, accept: false}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
