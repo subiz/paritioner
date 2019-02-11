@@ -190,11 +190,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:26376c16a9119cda830ec1051f0654d702255319b412148096f1c744ab5b257b"
+  digest = "1:3582878db3771e58a7b861ab59fb35b906bb4080babf6fd285d829815de104b5"
   name = "github.com/subiz/partitioner"
   packages = ["header"]
   pruneopts = "UT"
-  revision = "e9ddf6ac11bbc95f277659dc5231c41272829b00"
+  revision = "e0f28f45ce797217b26c5de66c580f504aacae91"
 
 [[projects]]
   branch = "master"
