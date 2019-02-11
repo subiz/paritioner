@@ -5,7 +5,7 @@ import (
 	"github.com/gocql/gocql"
 	"github.com/golang/protobuf/proto"
 	"github.com/subiz/errors"
-	pb "github.com/subiz/header/partitioner"
+	pb "github.com/subiz/partitioner/header"
 	"time"
 )
 
@@ -64,7 +64,7 @@ func NewDB(seeds []string) *DB {
 
 // Store persists configuration to the database
 func (me *DB) Store(conf *pb.Configuration) error {
-	b, _ :=conf.MarshalJSON()
+	b, _ := conf.MarshalJSON()
 	println("STORING", string(b))
 	confb, err := proto.Marshal(conf)
 	if err != nil {

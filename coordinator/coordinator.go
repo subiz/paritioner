@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/subiz/errors"
-	pb "github.com/subiz/header/partitioner"
+	pb "github.com/subiz/partitioner/header"
 	"sync"
 	"time"
 )
@@ -16,7 +16,7 @@ type Coor struct {
 	db         *DB
 	config     *pb.Configuration // intermediate configuration, TODO: this never be nil
 	workerComm WorkerComm
-//	hosts      map[string]string
+	//	hosts      map[string]string
 }
 
 // Workers communator, used to send signal (message) to workers
@@ -57,9 +57,6 @@ func (me *Coor) Join(w *pb.WorkerHost) error {
 	if err := me.db.SaveHost(me.config.Cluster, w.GetId(), w.GetHost()); err != nil {
 		return err
 	}
-
-
-
 
 	// me.hosts[id] = host
 }

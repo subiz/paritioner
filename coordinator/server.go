@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/subiz/errors"
 	"github.com/subiz/goutils/log"
-	pb "github.com/subiz/header/partitioner"
+	pb "github.com/subiz/partitioner/header"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 	"net"

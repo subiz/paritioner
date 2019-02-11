@@ -10,12 +10,12 @@
   version = "v1.3.5"
 
 [[projects]]
-  digest = "1:a59a467c541a1bf8b06e4fad6113028c959be6573b78ceca9f8020cd0d2127fc"
+  digest = "1:28917d5a3f5e53a4c8a4035195c022649c66a4d71d6357a2276cd347945bd527"
   name = "github.com/Shopify/sarama"
   packages = ["."]
   pruneopts = "UT"
-  revision = "879f631812a30a580659e8035e7cda9994bb99ac"
-  version = "v1.20.0"
+  revision = "03a43f93cd29dc549e6d9b11892795c206f9c38c"
+  version = "v1.20.1"
 
 [[projects]]
   digest = "1:526d64d0a3ac6c24875724a9355895be56a21f89a5d3ab5ba88d91244269a7d8"
@@ -59,7 +59,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1a5f28249f1a5b118994359a1c7b8c53ee1ff47aa7fe65884fbd20cd237001f4"
+  digest = "1:3e5d0cc91e7bf6d6262514fbfc8f37b8416663401655f2d8db1a798002472eee"
   name = "github.com/gocql/gocql"
   packages = [
     ".",
@@ -68,7 +68,7 @@
     "internal/streams",
   ]
   pruneopts = "UT"
-  revision = "70385f88b28b43805bd83d212169ab2d38810b15"
+  revision = "c53c3654dc8acfc0ace976e1535cb0b8abb027a4"
 
 [[projects]]
   digest = "1:4c0989ca0bcd10799064318923b9bc2db6b4d6338dd75f3f2d86c3511aaaf5cf"
@@ -122,15 +122,15 @@
   revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
 
 [[projects]]
-  digest = "1:e39a5ee8fcbec487f8fc68863ef95f2b025e0739b0e4aa55558a2b4cf8f0ecf0"
+  digest = "1:c7a5e79396b6eb570159df7a1d487ce5775bf43b7907976fbef6de544ea160ad"
   name = "github.com/pierrec/lz4"
   packages = [
     ".",
     "internal/xxh32",
   ]
   pruneopts = "UT"
-  revision = "635575b42742856941dbc767b44905bb9ba083f6"
-  version = "v2.0.7"
+  revision = "473cd7ce01a1113208073166464b98819526150e"
+  version = "v2.0.8"
 
 [[projects]]
   branch = "master"
@@ -142,11 +142,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:fade3228acf7353e7626c2578ce02fc9c88fd0a3b3b04ec027df996d6c56153d"
+  digest = "1:82368c8f879f3a06cfaffe2871bdd257ebc41d9e7e95d325afea5958c90c0d35"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "99618761420a5bae436ce9ed6ec5ca85c71d9291"
+  revision = "d82e7b2918437a9ac9afac9ed8fa5ddc7d55fd69"
 
 [[projects]]
   branch = "master"
@@ -166,28 +166,35 @@
     "map",
   ]
   pruneopts = "UT"
-  revision = "f1ea33171bd8ec436ce982643df2f35ef2c32202"
+  revision = "184dbf16e8802699112eff4055c427ad9b33f3d4"
 
 [[projects]]
   branch = "master"
-  digest = "1:5eacf4ede72f467ac850585e3dbe4e7317a643de96716e812a675c1fd0e47207"
+  digest = "1:00ac53713e35e09b8d598d27b3d3d87b3db6dd6e62acb0e5c3974f36aa70a06e"
   name = "github.com/subiz/header"
   packages = [
     "auth",
     "common",
     "logan",
-    "partitioner",
   ]
   pruneopts = "UT"
-  revision = "7a49a820252b6e8c3ef13377cdd4b3cc29dac3d7"
+  revision = "7c9dc7e171ffcfd330d0316e5b5d9d4b662b9867"
 
 [[projects]]
   branch = "master"
-  digest = "1:7e96ae74e872a27a9f9fdd295d320cb3a3d5295c31330aa55c076a6ae98515ff"
+  digest = "1:b58eb52d8522d8e43dea6cdfd7ab83ab282b23c33d802745f2a6b8a746efcae8"
   name = "github.com/subiz/kafka"
   packages = ["."]
   pruneopts = "UT"
-  revision = "0f45507a3f8b9f5c270f4a7769826def47efde1a"
+  revision = "aac0605af90e8b6872dd5b32a8bcc2fe0a402fa9"
+
+[[projects]]
+  branch = "master"
+  digest = "1:26376c16a9119cda830ec1051f0654d702255319b412148096f1c744ab5b257b"
+  name = "github.com/subiz/partitioner"
+  packages = ["header"]
+  pruneopts = "UT"
+  revision = "e9ddf6ac11bbc95f277659dc5231c41272829b00"
 
 [[projects]]
   branch = "master"
@@ -215,7 +222,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:89a0cb976397aa9157a45bb2b896d0bcd07ee095ac975e0f03c53250c402265e"
+  digest = "1:fc7b6b4384e1e849d99eab58eca4f8c0a76bad4699117d5077a9a5c3c83e289e"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -227,15 +234,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "927f97764cc334a6575f4b7a1584a147864d5723"
+  revision = "65e2d4e15006aab9813ff8769e768bbf4bb667a0"
 
 [[projects]]
   branch = "master"
-  digest = "1:5004e851e5eccde563d17871cd9d11c82e2faa578b1a0de81dc74867ad3845a4"
+  digest = "1:8b466798e96432c23185ca32826702885299f94eb644c9a8dedb79771dff383a"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "badf5585203e739f88c2c6cd34188a6f54b5d619"
+  revision = "3b5209105503162ded1863c307ac66fec31120dd"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -266,10 +273,10 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "bd9b4fb69e2ffd37621a6caa54dcbead29b546f2"
+  revision = "4b09977fb92221987e99d190c8f88f2c92727a29"
 
 [[projects]]
-  digest = "1:9edd250a3c46675d0679d87540b30c9ed253b19bd1fd1af08f4f5fb3c79fc487"
+  digest = "1:9ab5a33d8cb5c120602a34d2e985ce17956a4e8c2edce7e6961568f95e40c09a"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -305,8 +312,8 @@
     "tap",
   ]
   pruneopts = "UT"
-  revision = "df014850f6dee74ba2fc94874043a9f3f75fbfd8"
-  version = "v1.17.0"
+  revision = "a02b0774206b209466313a0b525d2c738fe407eb"
+  version = "v1.18.0"
 
 [[projects]]
   digest = "1:2d1fbdc6777e5408cabeb02bf336305e724b925ff4546ded0fa8715a7267922a"
@@ -325,7 +332,7 @@
     "github.com/kelseyhightower/envconfig",
     "github.com/subiz/errors",
     "github.com/subiz/goutils/log",
-    "github.com/subiz/header/partitioner",
+    "github.com/subiz/partitioner/header",
     "github.com/thanhpk/randstr",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
