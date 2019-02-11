@@ -69,7 +69,7 @@ func (me *Server) Rebalance(w *pb.WorkerHost, stream pb.Coordinator_RebalanceSer
 		return err
 	}
 
-	server.streamMgr.Pull(w.GetId(), stream, &pb.Configuration{TotalPartitions: -1})
+	server.streamMgr.Pull(w.GetId(), stream)
 	return nil
 }
 
@@ -80,7 +80,7 @@ func (me *Server) Accept(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, erro
 	}
 
 	chanid := makeChanId(w.GetId(), w.GetTerm())
-	server.chans.Send(chanid, vote{term: wid.Term, accept: true}, 3*time.Second)
+	server.chans.Send(chanid, vote{term: w.Term, accept: true}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
 
@@ -91,7 +91,7 @@ func (me *Server) Deny(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error)
 	}
 
 	chanid := makeChanId(w.GetId(), w.GetTerm())
-	server.chans.Send(chanid, vote{term: wid.Term, accept: false}, 3*time.Second)
+	server.chans.Send(chanid, vote{term: w.Term, accept: false}, 3*time.Second)
 	return &pb.Empty{}, nil
 }
 

@@ -11,14 +11,13 @@ type Stream interface {
 }
 
 // StreamMgr manages worker long polling connections
-// for each worker, user uses Pull method to maintaing the pulling
+// for each worker, user uses Pull method to maintain the pulling.
 // after worker leave, user should call Remove to clean up the resource
 type StreamMgr struct {
 	*sync.Mutex
 
 	// holds all connections inside a map
-	// key of the map is ID of worker, value of the map is the connection
-	// details
+	// used to lookup connection details using worker's ID
 	pulls map[string]workerConn
 }
 
@@ -36,8 +35,6 @@ type workerConn struct {
 
 	// a channel to remotely unhalt the blocking worker.Pull method
 	exitc chan bool
-
-	pingPayload interface{}
 }
 
 // NewStreamMgr creates a new StreamMgr object
@@ -46,26 +43,25 @@ func NewStreamMgr() *StreamMgr {
 }
 
 // Pull adds new connection to manager.
-// This method BLOCKS THE EXECUTION to keeping the streaming open
-// until user calls another Pull with
-// the same workerid. This represenses a single long polling request for each
-// worker id
-// User can creates many connections for a worker as they want but the manager
-// only keep the last one. It makes sure that in anytime, there are atmost one
-// long pulling request for a worker.
+// This method BLOCKS THE EXECUTION and keep the stream open until user calls
+// another Pull with the same workerid. This represenses a single long polling
+// request for each worker id
+// User can creates as many connections for a worker as they want but the
+// manager only hold the last one. It makes sure that in anytime, there are
+// ATMOST one long pulling request for a worker.
 // The execution can also be unblock by calling Remove
 // pull exits when:
-// - stream broke
-// - client canceled
-func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{}) {
+// - stream broken
+// - client cancelled
+// This method is thread-safe
+func (me *StreamMgr) Pull(workerid string, stream Stream) {
 	me.Lock()
 
-	// dropping the last long pulling request if existed
+	// drop the last long pulling request if existed
 	if conn, ok := me.pulls[workerid]; ok {
-		// we blocking the execution by makeing it receive from an empty channel.
-		// By closing the channel, we unblock the execution (so the pulling can die)
+		// we blocked the last pulling by receiving from an empty channel.
+		// here we unblock the execution (so the pulling can die)
 		conn.exitc <- true
-		delete(me.pulls, workerid)
 	}
 
 	c := make(chan bool)
@@ -74,11 +70,10 @@ func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{
 		worker_id:   workerid,
 		stream:      stream,
 		exitc:       c,
-		pingPayload: pingPayload,
 	}
 	me.Unlock()
 
-	c <- true // block until channel is sent
+	<-c // block
 }
 
 // Remove drops worker connection and it's pulling
@@ -86,6 +81,9 @@ func (me *StreamMgr) Pull(workerid string, stream Stream, pingPayload interface{
 // the last one and dropped all others connections. Any attempt to
 // delete previous connection is considered outdated and will be ignore
 func (me *StreamMgr) remove(conn workerConn) {
+	me.Lock()
+	defer me.Unlock()
+
 	oldconn, ok := me.pulls[conn.worker_id]
 	if !ok { // already deleted
 		return
@@ -96,9 +94,9 @@ func (me *StreamMgr) remove(conn workerConn) {
 		return
 	}
 
-	// recving from exitc to unblock the execution, releasing the poll
-	<-conn.exitc
 	delete(me.pulls, conn.worker_id)
+	// sending to exitc to unblock the execution, releasing the poll
+	conn.exitc <- true
 }
 
 // Send sends msg to worker's stream

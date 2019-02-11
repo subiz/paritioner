@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/subiz/errors"
 	pb "github.com/subiz/partitioner/header"
@@ -59,6 +58,7 @@ func (me *Coor) Join(w *pb.WorkerHost) error {
 	}
 
 	// me.hosts[id] = host
+	return nil
 }
 
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
@@ -85,13 +85,13 @@ func (me *Coor) GetConfig() *pb.Configuration {
 	return me.config
 }
 
-func (me *Coor) transition(newConf *pb.Configuration) error {
+func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error {
 	me.Lock()
 	defer me.Unlock()
 
 	// ignore no change
-	newb, _ := newConf.MarshalJSON()
-	oldb, _ := me.config.MarshalJSON()
+	newb, _ := proto.Marshal(newConf)
+	oldb, _ := proto.Marshal(me.config)
 	if bytes.Compare(newb, oldb) == 0 {
 		return nil
 	}
@@ -125,11 +125,11 @@ func (me *Coor) transition(newConf *pb.Configuration) error {
 			}
 			numVotes++
 			if numVotes == len(newWorkers) { // successed
-				fmt.Printf("SUCCESS %v\n", newPars)
-				if err := me.db.Store(newConfig); err != nil {
+				// fmt.Printf("SUCCESS %v\n", newPars)
+				if err := me.db.Store(newConf); err != nil {
 					return err
 				}
-				me.config = newConfig
+				me.config = newConf
 				return nil
 			}
 		case <-ticker.C:
@@ -166,6 +166,6 @@ func (me *Coor) ChangeWorkers(newWorkers []string) error {
 	newConfig := proto.Clone(me.config).(*pb.Configuration)
 	newConfig.Partitions = newPars
 	// newConfig.Hosts = newHosts
-	return me.transition(newConfig)
+	return me.transition(newConfig, newWorkers)
 
 }

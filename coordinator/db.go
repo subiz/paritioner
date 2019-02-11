@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/golang/protobuf/proto"
@@ -64,7 +65,7 @@ func NewDB(seeds []string) *DB {
 
 // Store persists configuration to the database
 func (me *DB) Store(conf *pb.Configuration) error {
-	b, _ := conf.MarshalJSON()
+	b, _ := json.Marshal(conf)
 	println("STORING", string(b))
 	confb, err := proto.Marshal(conf)
 	if err != nil {
