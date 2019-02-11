@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	pb "github.com/subiz/header/partitioner"
+	pb "github.com/subiz/partitioner/header"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"hash/fnv"
@@ -74,7 +74,7 @@ func NewInterceptor(service string, port int) grpc.DialOption {
 }
 
 // fetchPartitions calls worker api to return the latest partition map.
-// A partition map is an array tells which worker will handle which partition
+// A partition map is an array tells which worker will handle which partition.
 // partition number is ordinal index of array, each element contains worker
 // id. E.g: ["worker-0", "worker-1", "worker-0"] has 3 partitions:
 // {0, 1, 2}, partition 0 and 2 are handled by worker-0, partition 1 is handled
