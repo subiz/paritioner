@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	pb "github.com/subiz/header/partitioner"
 	"github.com/subiz/partitioner/client"
+	pb "github.com/subiz/partitioner/header"
 	"github.com/subiz/partitioner/worker"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"

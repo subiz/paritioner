@@ -27,10 +27,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/subiz/header"
-
-[[constraint]]
-  branch = "master"
   name = "github.com/subiz/partitioner"
 
 [[constraint]]
@@ -39,7 +35,7 @@
 
 [[constraint]]
   name = "google.golang.org/grpc"
-  version = "1.17.0"
+  version = "1.18.0"
 
 [prune]
   go-tests = true

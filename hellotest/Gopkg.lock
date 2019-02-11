@@ -18,10 +18,9 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:aa3d8d42865c42626b5c1add193692d045b3188b1479f0a0a88690d21fe20083"
+  digest = "1:84a5a2b67486d5d67060ac393aa255d05d24ed5ee41daecd5635ec22657b6492"
   name = "github.com/mailru/easyjson"
   packages = [
-    ".",
     "buffer",
     "jlexer",
     "jwriter",
@@ -31,30 +30,31 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:06c7f82e2d4d12525638bfe5118ae3e0dbd14edee36c244a2ffd42f0ea76ac06"
+  digest = "1:82368c8f879f3a06cfaffe2871bdd257ebc41d9e7e95d325afea5958c90c0d35"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "4f34280ea5501be6d237dd7d8ed7b792b3c913c5"
+  revision = "d82e7b2918437a9ac9afac9ed8fa5ddc7d55fd69"
 
 [[projects]]
   branch = "master"
-  digest = "1:ffcc5d50038aba53d6daab2506fe271590634fd8f278b7fac9e54c032a378f7a"
+  digest = "1:5c9df914738ae506e6d418eca80df587646628dbafdee82c47626246458e949b"
   name = "github.com/subiz/header"
   packages = ["partitioner"]
   pruneopts = "UT"
-  revision = "2db0a89eb268868114f64b0918c28a499d9b8e29"
+  revision = "7c9dc7e171ffcfd330d0316e5b5d9d4b662b9867"
 
 [[projects]]
   branch = "master"
-  digest = "1:da655e12b3bec404460b81157aa7bcef749ac25bf797474b148be867681a6c99"
+  digest = "1:412d88fa63b3b757607079faeb861aaaf3f25d5d2c9fe3e5a52cb9993f8bcad2"
   name = "github.com/subiz/partitioner"
   packages = [
     "client",
+    "header",
     "worker",
   ]
   pruneopts = "UT"
-  revision = "bd44c8359497dedf697f3887373e2a0f9a420f77"
+  revision = "e9ddf6ac11bbc95f277659dc5231c41272829b00"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -66,7 +66,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:89a0cb976397aa9157a45bb2b896d0bcd07ee095ac975e0f03c53250c402265e"
+  digest = "1:fc7b6b4384e1e849d99eab58eca4f8c0a76bad4699117d5077a9a5c3c83e289e"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -78,15 +78,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "927f97764cc334a6575f4b7a1584a147864d5723"
+  revision = "65e2d4e15006aab9813ff8769e768bbf4bb667a0"
 
 [[projects]]
   branch = "master"
-  digest = "1:5004e851e5eccde563d17871cd9d11c82e2faa578b1a0de81dc74867ad3845a4"
+  digest = "1:8b466798e96432c23185ca32826702885299f94eb644c9a8dedb79771dff383a"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "82a175fd1598e8a172e58ebdf5ed262bb29129e5"
+  revision = "3b5209105503162ded1863c307ac66fec31120dd"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -117,10 +117,10 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "bd9b4fb69e2ffd37621a6caa54dcbead29b546f2"
+  revision = "4b09977fb92221987e99d190c8f88f2c92727a29"
 
 [[projects]]
-  digest = "1:8c8ed249fa6a8db070bf2082f02052c697695fa5e1558b4e28dd0fb5f15f70a2"
+  digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -158,15 +158,15 @@
     "tap",
   ]
   pruneopts = "UT"
-  revision = "df014850f6dee74ba2fc94874043a9f3f75fbfd8"
-  version = "v1.17.0"
+  revision = "a02b0774206b209466313a0b525d2c738fe407eb"
+  version = "v1.18.0"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/subiz/header/partitioner",
     "github.com/subiz/partitioner/client",
+    "github.com/subiz/partitioner/header",
     "github.com/subiz/partitioner/worker",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
