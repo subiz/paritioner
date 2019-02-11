@@ -5,4 +5,4 @@
 # go get -d -u github.com/golang/protobuf/protoc-gen-go
 # git -C "$(go env GOPATH)"/src/github.com/golang/protobuf checkout $GIT_TAG
 # go install github.com/golang/protobuf/protoc-gen-go
-/snap/bin/protoc --go_out=. *.proto
+/snap/bin/protoc --go_out=plugins=grpc:. *.proto

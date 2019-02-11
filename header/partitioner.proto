@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package partitioner;
+package header;
 
 message Configuration {
 	string version = 1;
@@ -9,8 +9,8 @@ message Configuration {
 
 	int32 total_partitions = 6;
 	int32 next_term = 7;
-	map<string, WorkerPartitions> partitions = 9;
-	map<string, string> hosts = 10;
+	map<string, WorkerPartitions> partitions = 9; // map worker id to partition
+	map<string, string> hosts = 10; // map worker id to host
 }
 
 message WorkerPartitions {
@@ -32,7 +32,7 @@ message WorkerHost {
 
 service Coordinator {
 	rpc GetConfig(Cluster) returns (Configuration) {}
-	rpc Rebalance(WorkerHost) returns (stream Configuration) {}
+	rpc Rebalance(WorkerHost) returns (stream Configuration) {} // pull rebalance
 	rpc Accept(WorkerHost) returns (Empty) {}
 	rpc Deny(WorkerHost) returns (Empty) {}
 }
