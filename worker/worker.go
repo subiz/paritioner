@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/subiz/errors"
-	pb "github.com/subiz/header/partitioner"
+	pb "github.com/subiz/partitioner/header"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"hash/fnv"
