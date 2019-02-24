@@ -132,7 +132,7 @@ func (me *parBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 func (_ *parBalancer) Close() {}
 
 // fetchPartitions calls worker api to return the latest partition map
-// partition map is an array tells which worker will handle which partition
+// Partition map is an array tells which worker will handle which partition
 // partition number is ordinal index of array, each element contains worker
 // host
 // eg: ["worker-0:8081", "worker-1:8081", "worker-0:8081"] has 3 partitions:
@@ -163,13 +163,4 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 		}
 	}
 	return partitions, nil
-}
-
-// dialGRPC makes a connection to GRPC addr (e.g: grpc.subiz.com:8080)
-func dialGrpc(addr string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	opts = append(opts, grpc.WithBlock())
-	opts = append(opts, grpc.WithTimeout(2*time.Second))
-	return grpc.Dial(addr, opts...)
 }

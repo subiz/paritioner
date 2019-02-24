@@ -5,20 +5,10 @@ import (
 	"fmt"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/metadata"
-	"hash/fnv"
 	"math/rand"
 	"strings"
 	"sync"
 )
-
-const (
-	// GRPC Metadata key to store partition key attached to each GRPC request
-	// the key will be hashed to find the correct worker that handle the request
-	PartitionKey = "partitionkey"
-)
-
-// global hashing util, used to hash key to partition number
-var ghash = fnv.New32a()
 
 func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
 

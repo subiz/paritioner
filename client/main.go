@@ -21,7 +21,8 @@ func init() {
 type parBuilder struct{}
 
 // Build implements GRPC method Build in balancer.Builder
-func (me *parBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+func (me *parBuilder) Build(cc balancer.ClientConn,
+	opt balancer.BuildOptions) balancer.Balancer {
 	return &parBalancer{Mutex: &sync.Mutex{}, cc: cc, picker: NewParPicker()}
 }
 

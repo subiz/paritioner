@@ -36,14 +36,15 @@ type Client struct {
 	partitions []string
 }
 
-func dialGrpc(host string) (*grpc.ClientConn, error) {
+// dialGRPC makes a connection to GRPC addr (e.g: grpc.subiz.com:8080)
+func dialGrpc(addr string) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
 	// Enabling WithBlock tells the client to not give up trying to find a server
 	opts = append(opts, grpc.WithBlock())
 	// However, we're still setting a timeout so that if the server takes too long, we still give up
 	opts = append(opts, grpc.WithTimeout(2*time.Second))
-	return grpc.Dial(host, opts...)
+	return grpc.Dial(addr, opts...)
 }
 
 // NewInterceptor create new GRPC interceptor to partition request
@@ -71,28 +72,6 @@ func NewInterceptor(service string, port int) grpc.DialOption {
 	go me.fetchLoop(pclient)
 
 	return grpc.WithUnaryInterceptor(me.clientInterceptor)
-}
-
-// fetchPartitions calls worker api to return the latest partition map.
-// A partition map is an array tells which worker will handle which partition.
-// partition number is ordinal index of array, each element contains worker
-// id. E.g: ["worker-0", "worker-1", "worker-0"] has 3 partitions:
-// {0, 1, 2}, partition 0 and 2 are handled by worker-0, partition 1 is handled
-// by worker-1.
-func fetchPartitions(pclient pb.WorkerClient) ([]string, error) {
-	conf, err := pclient.GetConfig(context.Background(), &pb.Cluster{})
-	if err != nil {
-		return nil, err
-	}
-
-	// convert configuration fetched from worker to partition map
-	partitions := make([]string, conf.GetTotalPartitions())
-	for workerid, pars := range conf.GetPartitions() {
-		for _, parNum := range pars.GetPartitions() {
-			partitions[parNum] = workerid
-		}
-	}
-	return partitions, nil
 }
 
 // clientInterceptor is an GRPC client interceptor, it redirects the request to
