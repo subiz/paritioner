@@ -2,17 +2,15 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"math/rand"
+	"strconv"
+	"sync"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/metadata"
-	"math/rand"
-	"strings"
-	"sync"
 )
 
-func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
-
-// parPicker is shorten for partition picker. Its being used to pick the host
+// parPicker is shorten for partition picker. Its used to pick the right host
 // for a GRPC request based on partition key
 type parPicker struct {
 	*sync.Mutex
@@ -20,11 +18,13 @@ type parPicker struct {
 	subConns   map[string]balancer.SubConn
 }
 
+// NewParPicker creates a new parPicker object
+func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
+
 // Update is called by balancer to updates picker's current partitions and subConns
 func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn) {
 	me.Lock()
 	defer me.Unlock()
-	fmt.Printf("partitionerPicker: newPicker called with readySCs: %v\n", pars)
 
 	// copy subConns
 	me.subConns = make(map[string]balancer.SubConn)
@@ -55,20 +55,24 @@ func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balan
 	}
 
 	md, _ := metadata.FromOutgoingContext(ctx)
-	pkey := strings.Join(md[PartitionKey], "")
-
-	if pkey == "" { // random host
-		pkey = fmt.Sprintf("%d", rand.Int())
+	mdpar := md[PartitionKey]
+	var pkey string
+	if len(mdpar) > 0 {
+		pkey = mdpar[0]
 	}
 
+	if pkey == "" { // random host
+		pkey = strconv.Itoa(rand.Int())
+	}
+
+	me.Lock()
 	// hashing key to find the partition number
 	ghash.Write([]byte(pkey))
 	par := ghash.Sum32() % uint32(len(me.partitions))
 	ghash.Reset()
-
-	me.Lock()
 	sc := me.subConns[me.partitions[par]]
 	me.Unlock()
+
 	if sc == nil {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
