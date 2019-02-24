@@ -50,15 +50,88 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	return me
 }
 
-func (me *Coor) Join(w *pb.WorkerHost) error {
+func (me *Coor) Leave(req *pb.WorkerRequest) error {
 	me.Lock()
 	defer me.Unlock()
-	if err := me.db.SaveHost(me.config.Cluster, w.GetId(), w.GetHost()); err != nil {
+
+	err := me.validateRequest(req.Version, req.Cluster, req.Term)
+	if err != nil {
+		return err
+	}
+	// ignore if not in the cluster
+	_, found := me.config.Workers[req.Id]
+	if !found {
+		return nil
+	}
+
+	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
+	partitionMap := make(map[string][]int32)
+	// all current worker ids except the leaving one
+	newWorkerIds := make([]string, 0)
+	for workerid, w := range me.config.GetWorkers() {
+		if workerid != req.Id {
+			newWorkerIds = append(newWorkerIds, workerid)
+		}
+		partitionMap[workerid] = w.GetPartitions()
+	}
+
+	partitionMap = balance(me.config.TotalPartitions, partitionMap,
+		newWorkerIds)
+
+	newWorkers := make(map[string]*pb.WorkerInfo)
+	for id, pars := range partitionMap {
+		newWorkers[id] = me.config.Workers[id]
+		newWorkers[id].Partitions = pars
+	}
+
+	newConfig := proto.Clone(me.config).(*pb.Configuration)
+	newConfig.Workers = newWorkers
+	return me.transition(newConfig, newWorkerIds)
+}
+
+func (me *Coor) Join(req *pb.WorkerRequest) error {
+	me.Lock()
+	defer me.Unlock()
+
+	err := me.validateRequest(req.Version, req.Cluster, req.Term)
+	if err != nil {
 		return err
 	}
 
-	// me.hosts[id] = host
-	return nil
+	err = me.db.SaveHost(me.config.Cluster, req.Id, req.Host)
+	if err != nil {
+		return err
+	}
+	// ignore if already
+	_, found := me.config.Workers[req.Id]
+	if found {
+		return nil
+	}
+
+	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
+	partitionMap := make(map[string][]int32)
+	newWorkerIds := make([]string, 0)
+	for workerid, w := range me.config.Workers {
+		newWorkerIds = append(newWorkerIds, workerid)
+		partitionMap[workerid] = w.Partitions
+	}
+	newWorkerIds = append(newWorkerIds, req.Id)
+
+	partitionMap = balance(me.config.TotalPartitions, partitionMap,
+		newWorkerIds)
+
+	newWorkers := make(map[string]*pb.WorkerInfo)
+	for id, pars := range partitionMap {
+		newWorkers[id] = me.config.Workers[id]
+		if id == req.Id {
+			newWorkers[id] = &pb.WorkerInfo{Id: id, Host: req.Host}
+		}
+		newWorkers[id].Partitions = pars
+	}
+
+	newConfig := proto.Clone(me.config).(*pb.Configuration)
+	newConfig.Workers = newWorkers
+	return me.transition(newConfig, newWorkerIds)
 }
 
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
@@ -136,36 +209,4 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error
 			return errors.New(500, errors.E_partition_rebalance_timeout)
 		}
 	}
-
-}
-
-// make sure all other nodes are died
-// this protocol assume that nodes are all nodes that survived
-func (me *Coor) ChangeWorkers(newWorkers []string) error {
-
-	// partitions map, key is worker's ID, value is partitions number that is assigned for the worker
-	partitionM := make(map[string][]int32)
-	for workerid, w := range me.config.GetPartitions() {
-		partitionM[workerid] = w.GetPartitions()
-	}
-
-	if len(partitionM) == 0 {
-		allpars := make([]int32, 0)
-		for i := int32(0); i < me.config.GetTotalPartitions(); i++ {
-			allpars = append(allpars, i)
-		}
-		partitionM["_"] = allpars
-	}
-
-	partitionM = balance(partitionM, newWorkers)
-	newPars := make(map[string]*pb.WorkerPartitions)
-	for id, pars := range partitionM {
-		newPars[id] = &pb.WorkerPartitions{Partitions: pars}
-	}
-
-	newConfig := proto.Clone(me.config).(*pb.Configuration)
-	newConfig.Partitions = newPars
-	// newConfig.Hosts = newHosts
-	return me.transition(newConfig, newWorkers)
-
 }

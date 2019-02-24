@@ -16,7 +16,6 @@ var c Config
 func main() {
 	envconfig.MustProcess("coor", &c)
 	app := cli.NewApp()
-	app.Name = "coordinator"
 	app.Commands = []cli.Command{
 		{Name: "daemon", Usage: "run server", Action: daemon},
 	}

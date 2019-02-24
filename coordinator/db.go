@@ -16,12 +16,12 @@ const (
 	tblHost  = "host"
 )
 
-// DB allows cluster to reload its state after crash by persisting the state to
-// Cassandra database.
-// each DB object with hold reference to one cluster only. If one want multiple
+// DB allows the cluster to restore its state after crash by persisting the
+// state to a Cassandra cluster.
+// Each DB object holds a reference to one cluster only. If you want multiple
 // clusters, one should create multiple instances of DB
 //
-// befor use this struct, user must initialize cassandra keyspace and tables by
+// before use this struct, user must initialize cassandra keyspace and tables by
 // running following CQL commands in Cassandra cqlsh tool
 //   CREATE KEYSPACE IF NOT EXISTS partition WITH replication = {
 //     'class': 'SimpleStrategy',
@@ -35,8 +35,9 @@ type DB struct {
 	session *gocql.Session
 }
 
-// connect creates new session to cassandra database, this function auto
-// retry on error, it blocks until connection is successfully made
+// connect establish a new session to a Cassandra cluster, this function will
+// retry on error automatically, and blocking until a session successfully
+// established
 func connect(seeds []string, keyspace string) *gocql.Session {
 	cluster := gocql.NewCluster(seeds...)
 	cluster.Timeout = 10 * time.Second

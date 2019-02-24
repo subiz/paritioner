@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/subiz/errors"
-	"github.com/subiz/goutils/log"
 	pb "github.com/subiz/partitioner/header"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
@@ -36,7 +35,6 @@ func daemon(ctx *cli.Context) error {
 			coor:      NewCoordinator(service, db, bigServer),
 		}
 		bigServer.serverMap[service] = s
-		go lookupDNS(s)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -59,7 +57,33 @@ func makeChanId(workerid string, term int32) string {
 	return fmt.Sprintf("%s|%d", workerid, term)
 }
 
-func (me *Server) Rebalance(w *pb.WorkerHost, stream pb.Coordinator_RebalanceServer) error {
+func (me *Server) Leave(ctx context.Context, p *pb.WorkerRequest) (*pb.Empty, error) {
+	server := me.serverMap[p.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", p.GetCluster())
+	}
+
+	if err := server.coor.Leave(p); err != nil {
+		return nil, err
+	}
+
+	return &pb.Empty{}, nil
+}
+
+func (me *Server) Join(ctx context.Context, p *pb.WorkerRequest) (*pb.Empty, error) {
+	server := me.serverMap[p.GetCluster()]
+	if server == nil {
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", p.GetCluster())
+	}
+
+	if err := server.coor.Join(p); err != nil {
+		return nil, err
+	}
+
+	return &pb.Empty{}, nil
+}
+
+func (me *Server) Rebalance(w *pb.WorkerRequest, stream pb.Coordinator_RebalanceServer) error {
 	server := me.serverMap[w.GetCluster()]
 	if server == nil {
 		return errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
@@ -73,7 +97,7 @@ func (me *Server) Rebalance(w *pb.WorkerHost, stream pb.Coordinator_RebalanceSer
 	return nil
 }
 
-func (me *Server) Accept(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error) {
+func (me *Server) Accept(ctx context.Context, w *pb.WorkerRequest) (*pb.Empty, error) {
 	server := me.serverMap[w.GetCluster()]
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
@@ -84,7 +108,7 @@ func (me *Server) Accept(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, erro
 	return &pb.Empty{}, nil
 }
 
-func (me *Server) Deny(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error) {
+func (me *Server) Deny(ctx context.Context, w *pb.WorkerRequest) (*pb.Empty, error) {
 	server := me.serverMap[w.GetCluster()]
 	if server == nil {
 		return nil, errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
@@ -95,10 +119,10 @@ func (me *Server) Deny(ctx context.Context, w *pb.WorkerHost) (*pb.Empty, error)
 	return &pb.Empty{}, nil
 }
 
-func (me *Server) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
-	server := me.serverMap[cluster.GetId()]
+func (me *Server) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.Configuration, error) {
+	server := me.serverMap[req.Cluster]
 	if server == nil {
-		return nil, errors.New(400, errors.E_unknown, "cluster not found", cluster.GetId())
+		return nil, errors.New(400, errors.E_unknown, "cluster not found", req.Cluster)
 	}
 	return server.coor.GetConfig(), nil
 }
@@ -128,45 +152,5 @@ func (me *Server) Prepare(cluster, workerid string, conf *pb.Configuration) erro
 		}
 		return errors.New(500, errors.E_partition_rebalance_timeout,
 			"worker donot accept")
-	}
-}
-
-func safe(f func()) {
-	defer func() { recover() }()
-	f()
-}
-
-func lookupDNS(s *server) {
-	for {
-		safe(func() {
-			_, addrs, err := net.LookupSRV("", "", s.cluster)
-			for _, record := range addrs {
-				fmt.Printf("Target: %s:%d\n", record.Target, record.Port)
-			}
-			if err != nil {
-				fmt.Printf("Could not get IPs: %v\n", err)
-			}
-
-			ips, err := net.LookupIP(s.cluster)
-			if err != nil {
-				fmt.Printf("Could not get IPs: %v\n", err)
-				return
-			}
-
-			fmt.Println("looking up dns, got", ips)
-			conf := s.coor.GetConfig()
-			if len(ips) == len(conf.GetPartitions()) { // no change
-				return
-			}
-			workers := make([]string, 0)
-			for i := 0; i < len(ips); i++ {
-				workers = append(workers, fmt.Sprintf("%s-%d", s.cluster, i))
-			}
-			if err := s.coor.ChangeWorkers(workers); err != nil {
-				log.Error(err)
-				return
-			}
-		})
-		time.Sleep(2 * time.Second)
 	}
 }
