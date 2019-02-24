@@ -2,17 +2,19 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/subiz/errors"
-	pb "github.com/subiz/partitioner/header"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"hash/fnv"
 	"io"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/subiz/errors"
+	pb "github.com/subiz/partitioner/header"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -49,12 +51,12 @@ type Worker struct {
 
 // NewWorker creates and starts a new Worker object
 // parameters:
-//  host: grpc host address for coordinator or other workers to connect
+//  host: address for coordinator or other workers to connect
 //    to this worker. E.g: web-1.web:8080
-//  cluster: ID of cluster. E.g: web
+//  cluster: ID of the cluster. E.g: web
 //  id: ID of the worker, this must be unique for each workers inside
 //    cluster. E.g: web-1
-//  coordinator: host address of coordinator, used to listen changes
+//  coordinator: address of the coordinator, used to listen changes
 //    and making transaction. E.g: coordinator:8021
 func NewWorker(host, cluster, id, coordinator string) *Worker {
 	me := &Worker{
@@ -66,6 +68,9 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 		conn:      make(map[string]*grpc.ClientConn),
 		dialMutex: &sync.Mutex{},
 	}
+
+	// dial to coordinator, retry automatically on error, block until
+	// connection is made
 	for {
 		cconn, err := dialGrpc(coordinator)
 		if err != nil {
@@ -76,6 +81,7 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 		me.coor = pb.NewCoordinatorClient(cconn)
 		break
 	}
+
 	me.fetchConfig()
 	go me.rebalancePull()
 	return me
@@ -115,19 +121,24 @@ func (me *Worker) rebalancePull() {
 				}
 
 				if err != nil {
-					fmt.Printf("ERR while rebalancing %v. Retry in 2 secs\n", err)
+					fmt.Printf("\nERR #E4343A while rebalancing %v. Retry in 2 secs", err)
 					time.Sleep(2 * time.Second)
 					return
 				}
 
 				me.Lock()
 
-				err = me.validateRequest(conf.GetVersion(), conf.GetCluster(), conf.GetTerm())
+				err = me.validateRequest(conf.GetVersion(), conf.GetCluster(),
+					conf.GetTerm())
 				if err != nil {
-					me.coor.Deny(ctx, &pb.WorkerHost{Cluster: me.cluster, Id: me.id, Term: conf.Term})
+					fmt.Printf("\nERR #FD84DD maleform request %v", err)
 				} else {
 					me.block(conf.GetPartitions())
-					me.coor.Accept(ctx, &pb.WorkerHost{Cluster: me.cluster, Id: me.id, Term: conf.Term})
+					me.coor.Accept(ctx, &pb.WorkerHost{
+						Cluster: me.cluster,
+						Id:      me.id,
+						Term:    conf.Term,
+					})
 				}
 				me.fetchConfig()
 				me.notifySubscribers()
@@ -166,7 +177,7 @@ func (me *Worker) fetchConfig() {
 		break
 	}
 
-	b, _ := me.config.MarshalJSON()
+	b, _ := json.Marshal(me.config)
 	fmt.Println("FETCHED.", string(b))
 	// rebuild partition map using coordinator's configuration
 	me.partitions = make([]partition, conf.GetTotalPartitions())

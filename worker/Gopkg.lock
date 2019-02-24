@@ -25,29 +25,30 @@
     "jwriter",
   ]
   pruneopts = "UT"
-  revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
+  revision = "6243d8e04c3f819e79757e8bc3faa15c3cb27003"
 
 [[projects]]
   branch = "master"
-  digest = "1:82368c8f879f3a06cfaffe2871bdd257ebc41d9e7e95d325afea5958c90c0d35"
+  digest = "1:c4ef3231b9c107698d88a208ecda73a65031bd0196c657aacb6181be3f3b4f2d"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "d82e7b2918437a9ac9afac9ed8fa5ddc7d55fd69"
+  revision = "044cd33d84acb56032b7513b173931618c32d692"
 
 [[projects]]
   branch = "master"
-  digest = "1:26376c16a9119cda830ec1051f0654d702255319b412148096f1c744ab5b257b"
+  digest = "1:87dc5599071f1a1deb901d9d6b26fc747934181f67520fb0cf9264e26b3eed62"
   name = "github.com/subiz/partitioner"
   packages = ["header"]
   pruneopts = "UT"
-  revision = "e9ddf6ac11bbc95f277659dc5231c41272829b00"
+  revision = "e8e2380a401983895099387a8f3d2ab5720de065"
 
 [[projects]]
   branch = "master"
-  digest = "1:cd17bc5dbd6ff6bd147dcd4712d423c1808f529c77c879c34df6b20b7501562b"
+  digest = "1:fc7b6b4384e1e849d99eab58eca4f8c0a76bad4699117d5077a9a5c3c83e289e"
   name = "golang.org/x/net"
   packages = [
+    "context",
     "http/httpguts",
     "http2",
     "http2/hpack",
@@ -56,15 +57,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "65e2d4e15006aab9813ff8769e768bbf4bb667a0"
+  revision = "3a22650c66bd7f4fb6d1e8072ffd7b75c8a27898"
 
 [[projects]]
   branch = "master"
-  digest = "1:8b466798e96432c23185ca32826702885299f94eb644c9a8dedb79771dff383a"
+  digest = "1:d0e9a312c4610a508569ab25e54d34600b1a96d19b1866ece104ffdf1c1b9d2c"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "3b5209105503162ded1863c307ac66fec31120dd"
+  revision = "cd391775e71e684db52b63df9affd58269495083"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -95,7 +96,7 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "4b09977fb92221987e99d190c8f88f2c92727a29"
+  revision = "082222b4a5c572e33e82ee9162d1352c7cf38682"
 
 [[projects]]
   digest = "1:9ab5a33d8cb5c120602a34d2e985ce17956a4e8c2edce7e6961568f95e40c09a"
