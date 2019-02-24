@@ -1,56 +1,51 @@
 syntax = "proto3";
-
 package header;
 
 message Configuration {
-	string version = 1;
-	int32 term = 2;
-	string cluster = 3; // ID of the cluster
+	string version = 2;
+	int32 term = 3;
+	string cluster = 4; // ID of the cluster
 
-	int32 total_partitions = 6;
-	int32 next_term = 7;
-	map<string, WorkerPartitions> partitions = 9; // map worker id to partition
-	map<string, string> hosts = 10; // map worker id to host
+	int32 total_partitions = 5;
+	int32 next_term = 6;
+
+	map<string, WorkerInfo> workers = 7; // map worker id to partition
 }
 
-message WorkerPartitions {
+message WorkerInfo {
+	string id = 5;
 	repeated int32 partitions = 7;
+	string host = 8;
+}
+
+message GetConfigRequest {
+	string version = 2;
+	int32 term = 3;
+	string cluster = 4;
+}
+
+message WorkerRequest {
+	string version = 2;
+	int32 term = 3;
+	string cluster = 4;
+	string id = 5;
+	string host = 6;
 }
 
 message Empty {}
 
-message Cluster {
-	string id = 1;
-}
-
-message WorkerHost {
-	string cluster = 1;
-	string id = 2;
-	int32 term = 3;
-	string host = 4;
-}
-
-message LeaveRequest {
-	string cluster = 1;
-	string worker_id = 2;
-	int32 term = 3;
-}
-
 service Coordinator {
-	rpc GetConfig(Cluster) returns (Configuration) {}
-	rpc Leave(LeaveRequest) returns (Empty) {}
-	rpc Rebalance(WorkerHost) returns (stream Configuration) {} // pull rebalance
-	rpc Accept(WorkerHost) returns (Empty) {}
+	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
+	rpc Leave(WorkerRequest) returns (Empty) {}
+	rpc Join(WorkerRequest) returns (Empty) {}
+	rpc Rebalance(WorkerRequest) returns (stream Configuration) {} // pull rebalance
+	rpc Accept(WorkerRequest) returns (Empty) {}
 }
 
 service Worker {
-	rpc GetConfig(Cluster) returns (Configuration) {}
+	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
 }
 
 service Hello {
-	rpc Hello(Cluster) returns (WorkerHost) {}
-}
-
-service Goodbye {
-	rpc Goodbye(Cluster) returns (WorkerHost) {}
+	rpc Hello(GetConfigRequest) returns (WorkerInfo) {}
 }
