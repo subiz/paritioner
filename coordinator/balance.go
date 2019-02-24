@@ -19,6 +19,7 @@ func (s byLength) Less(i, j int) bool {
 	return len(s[i].pars) > len(s[j].pars)
 }
 
+// isIn tells whether slice A has an element equal s
 func isIn(A []string, s string) bool {
 	for _, a := range A {
 		if a == s {
@@ -28,7 +29,7 @@ func isIn(A []string, s string) bool {
 	return false
 }
 
-func balance(partitions map[string][]int32, nodes []string) map[string][]int32 {
+func balance(numPar int32, partitions map[string][]int32, nodes []string) map[string][]int32 {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -41,14 +42,7 @@ func balance(partitions map[string][]int32, nodes []string) map[string][]int32 {
 	}
 
 	for _, n := range nodes {
-		found := false
-		for _, e := range elems {
-			if e.id == n {
-				found = true
-				break
-			}
-		}
-
+		_, found := partitions[n]
 		if !found {
 			elems = append(elems, elem{id: n})
 		}
@@ -56,14 +50,29 @@ func balance(partitions map[string][]int32, nodes []string) map[string][]int32 {
 
 	sort.Sort(byLength(elems))
 
-	// count total of partition
-	totalPars := 0
-	for _, pars := range partitions {
-		totalPars += len(pars)
+	allpars := make(map[int32]bool)
+	for i := int32(0); i < numPar; i++ {
+		allpars[i] = true
 	}
 
-	mod := totalPars % len(nodes)
-	numWorkerPars := totalPars / len(nodes)
+	// TODO: handle malform pars: 2 worker handle 1 par or out of range par
+	// find all missing partition
+	for _, pars := range partitions {
+		for _, p := range pars {
+			delete(allpars, p)
+		}
+	}
+	// we know that elems has at least 1 element
+	// use this loop instead of `for p := range allpars {` because we want
+	// to preseve increment order
+	for i := int32(0); i < numPar; i++ {
+		if allpars[i] {
+			elems[0].pars = append(elems[0].pars, i)
+		}
+	}
+
+	mod := int(numPar) % len(nodes)
+	numWorkerPars := int(numPar) / len(nodes)
 	i = 0
 	for k, e := range elems {
 		if !isIn(nodes, e.id) {

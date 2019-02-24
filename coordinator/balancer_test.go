@@ -46,95 +46,124 @@ func TestBalance(t *testing.T) {
 		desc     string
 		config   map[string][]int32
 		nodes    []string
+		numPars  int32
 		expected map[string][]int32
 	}{{
 		desc: "test 1, remove node",
 		config: map[string][]int32{
-			"1": []int32{1, 2},
-			"2": []int32{3, 4},
-			"3": []int32{5, 6},
-			"4": []int32{7, 8},
+			"1": []int32{0, 1},
+			"2": []int32{2, 3},
+			"3": []int32{4, 5},
+			"4": []int32{6, 7},
 		},
-		nodes: []string{"1", "2", "3"},
+		numPars: 8,
+		nodes:   []string{"1", "2", "3"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2, 7},
-			"2": []int32{3, 4, 8},
-			"3": []int32{5, 6},
+			"1": []int32{0, 1, 6},
+			"2": []int32{2, 3, 7},
+			"3": []int32{4, 5},
 		},
 	}, {
 		desc: "test 2, add node",
 		config: map[string][]int32{
-			"1": []int32{1, 2},
-			"2": []int32{3, 4},
-			"3": []int32{5, 6},
-			"4": []int32{7, 8},
+			"1": []int32{0, 1},
+			"2": []int32{2, 3},
+			"3": []int32{4, 5},
+			"4": []int32{6, 7},
 		},
-		nodes: []string{"1", "2", "3", "4", "5"},
+		numPars: 8,
+		nodes:   []string{"1", "2", "3", "4", "5"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2},
-			"2": []int32{3, 4},
-			"3": []int32{5, 6},
-			"4": []int32{7},
-			"5": []int32{8},
+			"1": []int32{0, 1},
+			"2": []int32{2, 3},
+			"3": []int32{4, 5},
+			"4": []int32{6},
+			"5": []int32{7},
 		},
 	}, {
 		desc: "test 4, no change in cluster, just rebalance",
 		config: map[string][]int32{
-			"1": []int32{1, 2},
-			"2": []int32{3, 4},
-			"3": []int32{5, 6},
+			"1": []int32{0, 1},
+			"2": []int32{2, 3},
+			"3": []int32{4, 5},
 			"4": []int32{},
 		},
-		nodes: []string{"1", "2", "3", "4"},
+		numPars: 6,
+		nodes:   []string{"1", "2", "3", "4"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2},
-			"2": []int32{3, 4},
-			"3": []int32{5},
-			"4": []int32{6},
+			"1": []int32{0, 1},
+			"2": []int32{2, 3},
+			"3": []int32{4},
+			"4": []int32{5},
 		},
 	}, {
 		desc: "unbalanced remove node",
 		config: map[string][]int32{
-			"1": []int32{1, 2, 3, 4, 5, 9},
-			"2": []int32{6},
-			"3": []int32{7, 8},
+			"1": []int32{0, 1, 2, 3, 4, 8},
+			"2": []int32{5},
+			"3": []int32{6, 7},
 			"4": []int32{},
 		},
-		nodes: []string{"1", "3", "4"},
+		numPars: 9,
+		nodes:   []string{"1", "3", "4"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2, 3},
-			"3": []int32{7, 8, 4},
-			"4": []int32{5, 9, 6},
+			"1": []int32{0, 1, 2},
+			"3": []int32{6, 7, 3},
+			"4": []int32{4, 8, 5},
 		},
 	}, {
 		desc: "unbalanced add node",
 		config: map[string][]int32{
-			"1": []int32{1, 2, 3, 4, 5, 6, 9},
-			"3": []int32{7, 8},
+			"1": []int32{0, 1, 2, 3, 4, 5, 8},
+			"3": []int32{6, 7},
 		},
-		nodes: []string{"1", "2", "3"},
+		numPars: 9,
+		nodes:   []string{"1", "2", "3"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2, 3},
-			"2": []int32{9, 5, 6},
-			"3": []int32{7, 8, 4},
+			"1": []int32{0, 1, 2},
+			"2": []int32{8, 4, 5},
+			"3": []int32{6, 7, 3},
 		},
 	}, {
 		desc: "remove many nodes",
 		config: map[string][]int32{
-			"1": []int32{1, 2, 3, 4, 5},
-			"2": []int32{6, 7, 8, 9, 10},
-			"3": []int32{11, 12, 13, 14, 15},
-			"4": []int32{16, 17, 18, 19, 20},
+			"1": []int32{0, 1, 2, 3, 4},
+			"2": []int32{5, 6, 7, 8, 9},
+			"3": []int32{10, 11, 12, 13, 14},
+			"4": []int32{15, 16, 17, 18, 19},
 		},
-		nodes: []string{"1", "2"},
+		numPars: 20,
+		nodes:   []string{"1", "2"},
 		expected: map[string][]int32{
-			"1": []int32{1, 2, 3, 4, 5, 11, 12, 13, 14, 15},
-			"2": []int32{6, 7, 8, 9, 10, 16, 17, 18, 19, 20},
+			"1": []int32{0, 1, 2, 3, 4, 10, 11, 12, 13, 14},
+			"2": []int32{5, 6, 7, 8, 9, 15, 16, 17, 18, 19},
+		},
+	}, {
+		desc: "remove all nodes",
+		config: map[string][]int32{
+			"1": []int32{0, 1, 2, 3, 4},
+			"2": []int32{5, 6, 7, 8, 9},
+			"3": []int32{10, 11, 12, 13, 14},
+			"4": []int32{15, 16, 17, 18, 19},
+		},
+		numPars:  20,
+		nodes:    []string{},
+		expected: map[string][]int32{},
+	}, {
+		desc:    "join all nodes",
+		config:  map[string][]int32{},
+		numPars: 20,
+		nodes:   []string{"1", "2", "3", "4"},
+		expected: map[string][]int32{
+			"1": []int32{0, 1, 2, 3, 4},
+			"2": []int32{5, 6, 7, 8, 9},
+			"3": []int32{10, 11, 12, 13, 14},
+			"4": []int32{15, 16, 17, 18, 19},
 		},
 	}}
 
 	for _, tc := range tcs {
-		out := balance(tc.config, tc.nodes)
+		out := balance(tc.numPars, tc.config, tc.nodes)
 		if !compareM(out, tc.expected) {
 			t.Fatalf("in test '%s', expect %v, got %v", tc.desc, tc.expected, out)
 		}
