@@ -26,27 +26,19 @@
     "jwriter",
   ]
   pruneopts = "UT"
-  revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
+  revision = "6243d8e04c3f819e79757e8bc3faa15c3cb27003"
 
 [[projects]]
   branch = "master"
-  digest = "1:82368c8f879f3a06cfaffe2871bdd257ebc41d9e7e95d325afea5958c90c0d35"
+  digest = "1:c4ef3231b9c107698d88a208ecda73a65031bd0196c657aacb6181be3f3b4f2d"
   name = "github.com/subiz/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "d82e7b2918437a9ac9afac9ed8fa5ddc7d55fd69"
+  revision = "044cd33d84acb56032b7513b173931618c32d692"
 
 [[projects]]
   branch = "master"
-  digest = "1:5c9df914738ae506e6d418eca80df587646628dbafdee82c47626246458e949b"
-  name = "github.com/subiz/header"
-  packages = ["partitioner"]
-  pruneopts = "UT"
-  revision = "7c9dc7e171ffcfd330d0316e5b5d9d4b662b9867"
-
-[[projects]]
-  branch = "master"
-  digest = "1:412d88fa63b3b757607079faeb861aaaf3f25d5d2c9fe3e5a52cb9993f8bcad2"
+  digest = "1:1e22d06a9535d7fd5d589e0440b1fcd7099a3d482d0908bada325759456c9ae5"
   name = "github.com/subiz/partitioner"
   packages = [
     "client",
@@ -54,7 +46,7 @@
     "worker",
   ]
   pruneopts = "UT"
-  revision = "e9ddf6ac11bbc95f277659dc5231c41272829b00"
+  revision = "e8e2380a401983895099387a8f3d2ab5720de065"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -78,15 +70,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "65e2d4e15006aab9813ff8769e768bbf4bb667a0"
+  revision = "3a22650c66bd7f4fb6d1e8072ffd7b75c8a27898"
 
 [[projects]]
   branch = "master"
-  digest = "1:8b466798e96432c23185ca32826702885299f94eb644c9a8dedb79771dff383a"
+  digest = "1:d0e9a312c4610a508569ab25e54d34600b1a96d19b1866ece104ffdf1c1b9d2c"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "3b5209105503162ded1863c307ac66fec31120dd"
+  revision = "cd391775e71e684db52b63df9affd58269495083"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -117,7 +109,7 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "4b09977fb92221987e99d190c8f88f2c92727a29"
+  revision = "082222b4a5c572e33e82ee9162d1352c7cf38682"
 
 [[projects]]
   digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"

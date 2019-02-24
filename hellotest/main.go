@@ -78,7 +78,7 @@ func runClient(ctx *cli.Context) {
 	opts = append(opts, grpc.WithInsecure())
 	opts = append(opts, grpc.WithBlock())
 	opts = append(opts, grpc.WithTimeout(10*time.Second))
-	opts = append(opts, client.NewInterceptor("hellotest-0.hellotest:50051"))
+	opts = append(opts, grpc.WithBalancerName(client.Name))
 	conn, err := grpc.Dial("hellotest-0.hellotest:50051", opts...)
 	if err != nil {
 		panic(err)
