@@ -103,10 +103,12 @@ func (me *Worker) rebalancePull() {
 	ctx := context.Background()
 	for { // replace to rebalance
 		safe(func() {
-			stream, err := me.coor.Rebalance(ctx, &pb.WorkerHost{
+			stream, err := me.coor.Rebalance(ctx, &pb.WorkerRequest{
+				Version: me.version,
 				Cluster: me.cluster,
 				Id:      me.id,
 				Host:    me.host,
+				Term:    me.config.Term,
 			})
 
 			if err != nil {
@@ -133,8 +135,9 @@ func (me *Worker) rebalancePull() {
 				if err != nil {
 					fmt.Printf("\nERR #FD84DD maleform request %v", err)
 				} else {
-					me.block(conf.GetPartitions())
-					me.coor.Accept(ctx, &pb.WorkerHost{
+					me.block(conf.Workers)
+					me.coor.Accept(ctx, &pb.WorkerRequest{
+						Version: me.version,
 						Cluster: me.cluster,
 						Id:      me.id,
 						Term:    conf.Term,
@@ -159,7 +162,11 @@ func (me *Worker) fetchConfig() {
 	fmt.Println("FETCHING CONFIG...")
 
 	for {
-		conf, err := me.coor.GetConfig(ctx, &pb.Cluster{Id: me.cluster})
+		conf, err := me.coor.GetConfig(ctx, &pb.GetConfigRequest{
+			Version: me.version,
+			Term:    me.config.Term,
+			Cluster: me.cluster,
+		})
 		if err != nil {
 			fmt.Printf("ERR #234FOISDOUD config %v. Retry after 2 secs\n", err)
 			time.Sleep(2 * time.Second)
@@ -181,11 +188,11 @@ func (me *Worker) fetchConfig() {
 	fmt.Println("FETCHED.", string(b))
 	// rebuild partition map using coordinator's configuration
 	me.partitions = make([]partition, conf.GetTotalPartitions())
-	for workerid, pars := range conf.GetPartitions() {
+	for workerid, pars := range conf.Workers {
 		for _, p := range pars.GetPartitions() {
 			me.partitions[p] = partition{
 				worker_id:   workerid,
-				worker_host: conf.Hosts[workerid],
+				worker_host: conf.Workers[workerid].GetHost(),
 				state:       NORMAL,
 			}
 		}
@@ -243,7 +250,7 @@ func (me *Worker) validateRequest(version, cluster string, term int32) error {
 }
 
 // GetConfig is a GRPC handler, it returns current configuration of the cluster
-func (me *Worker) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Configuration, error) {
+func (me *Worker) GetConfig(ctx context.Context, cluster *pb.GetConfigRequest) (*pb.Configuration, error) {
 	me.Lock()
 	for me.config != nil {
 		me.Unlock()
@@ -255,7 +262,7 @@ func (me *Worker) GetConfig(ctx context.Context, cluster *pb.Cluster) (*pb.Confi
 }
 
 // block blocks outdated partitions
-func (me *Worker) block(partitions map[string]*pb.WorkerPartitions) {
+func (me *Worker) block(partitions map[string]*pb.WorkerInfo) {
 	for workerid, pars := range partitions {
 		for _, p := range pars.GetPartitions() {
 			if workerid != me.partitions[p].worker_id {
