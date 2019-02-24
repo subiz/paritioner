@@ -3,13 +3,15 @@ package client
 import (
 	"context"
 	"fmt"
-	pb "github.com/subiz/partitioner/header"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"hash/fnv"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	pb "github.com/subiz/partitioner/header"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -53,7 +55,7 @@ func dialGrpc(addr string) (*grpc.ClientConn, error) {
 func NewInterceptor(service string, port int) grpc.DialOption {
 	me := &Client{RWMutex: &sync.RWMutex{}}
 	me.conn = make(map[string]*grpc.ClientConn)
-	me.port = fmt.Sprintf("%d", port)
+	me.port = strconv.Itoa(port)
 	pconn, err := dialGrpc(service + ":" + me.port)
 	if err != nil {
 		panic(err)
@@ -83,7 +85,7 @@ func NewInterceptor(service string, port int) grpc.DialOption {
 // happend, request will be redirected one or more times in worker side till
 // it arrive the correct host. This may look ineffiecient but we don't have to
 // guarrantee consistent at client-side, make client-side code so much simpler
-// when the  network is stable and no worker member changes (most of the time),
+// when the network is stable and no worker member changes (most of the time),
 // partition map is in-sync, clients are now sending requests directly to the
 // correct host without making any additional redirection.
 func (me *Client) clientInterceptor(ctx context.Context, method string, in interface{}, out interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {

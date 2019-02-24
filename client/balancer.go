@@ -3,17 +3,46 @@ package client
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math/rand"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/subiz/errors"
 	pb "github.com/subiz/partitioner/header"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
-	"sync"
-	"time"
 )
 
-// parBalancer is shorten for partitioner balancer
+// GRPC balancer requires 3 parts: Builer, Balancer and Picker
+// GRPC uses Builder to create a new Balancer object
+//
+// Balancer calls Picker.Pick before every request to determinds which host
+// to send the request to
+//
+//
+//
+//
+
+// parBuilder is shorten for partition load balancer builder. Its used by GRPC
+// to build a new balancer, which is in this case, a ParBalancer
+// This struct implements GRPC interface balancer.Builder
+type parBuilder struct{}
+
+// Build implements GRPC method Build in balancer.Builder
+func (me *parBuilder) Build(cc balancer.ClientConn,
+	opt balancer.BuildOptions) balancer.Balancer {
+	return &parBalancer{Mutex: &sync.Mutex{}, cc: cc, picker: NewParPicker()}
+}
+
+// Name implements GRPC method Name in balancer.Builder
+func (me *parBuilder) Name() string { return Name }
+
+// parBalancer is a GRPC balancer, its name is shorten for partitioner balancer
 type parBalancer struct {
 	*sync.Mutex
 	cc balancer.ClientConn
@@ -33,7 +62,8 @@ type parBalancer struct {
 // fetchLoop synchronizes partition in every 30 sec
 //
 func (me *parBalancer) fetchLoop(addr string) {
-	// loop once only
+	// make sure that we only loop once
+	// the first loop will set fetching=true
 	me.Lock()
 	if me.fetching {
 		me.Unlock()
@@ -42,7 +72,8 @@ func (me *parBalancer) fetchLoop(addr string) {
 	me.fetching = true
 	me.Unlock()
 
-	// trying to connect to a worker
+	// try to connect to a worker, retry automatically on error
+	// block until success
 	var pconn *grpc.ClientConn
 	for {
 		var err error
@@ -164,3 +195,76 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 	}
 	return partitions, nil
 }
+
+// parPicker is shorten for partition picker. Its used to pick the right host
+// for a GRPC request based on partition key
+type parPicker struct {
+	*sync.Mutex
+	partitions []string
+	subConns   map[string]balancer.SubConn
+}
+
+// NewParPicker creates a new parPicker object
+func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
+
+// Update is called by balancer to updates picker's current partitions and subConns
+func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn) {
+	me.Lock()
+	defer me.Unlock()
+
+	// copy subConns
+	me.subConns = make(map[string]balancer.SubConn)
+	for host, sc := range subConns {
+		me.subConns[host] = sc
+	}
+
+	// copy partitions
+	me.partitions = make([]string, len(pars))
+	copy(me.partitions, pars)
+}
+
+// Pick is called before each GRPC request to determind wich subconn to send
+// the request to
+// We find worker host by hashing partition key to a partition number then
+// look it up in the current partition map
+// worker host might not be the correct one since partition map can be
+// unsynchronized (by network lantences or network partitioned). When it
+// happend, request will be redirected one or more times in worker side till
+// it arrive the correct host. This may look ineffiecient but we don't have to
+// guarrantee consistent at client-side, make client-side code so much simpler
+// when the  network is stable and no worker member changes (most of the time),
+// partition map is in-sync, clients are now sending requests directly to the
+// correct host without making any additional redirection.
+func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+	if len(me.subConns) <= 0 {
+		return nil, nil, balancer.ErrNoSubConnAvailable
+	}
+
+	md, _ := metadata.FromOutgoingContext(ctx)
+	mdpar := md[PartitionKey]
+	var pkey string
+	if len(mdpar) > 0 {
+		pkey = mdpar[0]
+	}
+
+	if pkey == "" { // random host
+		pkey = strconv.Itoa(rand.Int())
+	}
+
+	me.Lock()
+	// hashing key to find the partition number
+	g_pickerhash.Write([]byte(pkey))
+	par := g_pickerhash.Sum32() % uint32(len(me.partitions))
+	g_pickerhash.Reset()
+	sc := me.subConns[me.partitions[par]]
+	me.Unlock()
+
+	if sc == nil {
+		return nil, nil, balancer.ErrNoSubConnAvailable
+	}
+	return sc, nil, nil
+}
+
+// global hashing util, used to hash key to partition number
+// must lock before use
+var g_pickerhash = fnv.New32a()
