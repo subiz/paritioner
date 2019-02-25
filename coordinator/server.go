@@ -12,6 +12,8 @@ import (
 )
 
 type Server struct {
+	// map of server by cluster_id, this map is write one when creating server
+	// so we don't need a lock for this map
 	serverMap map[string]*server
 }
 
@@ -23,11 +25,11 @@ type server struct {
 }
 
 func daemon(ctx *cli.Context) error {
-	db := NewDB(c.CassandraSeeds)
+	db := NewDB(cf.CassandraSeeds)
 	bigServer := &Server{}
 	bigServer.serverMap = make(map[string]*server)
 	var err error
-	for _, service := range c.Services {
+	for _, service := range cf.Services {
 		s := &server{
 			cluster:   service,
 			streamMgr: NewStreamMgr(),
@@ -40,7 +42,7 @@ func daemon(ctx *cli.Context) error {
 	grpcServer := grpc.NewServer()
 	pb.RegisterCoordinatorServer(grpcServer, bigServer)
 
-	lis, err := net.Listen("tcp", ":"+c.Port)
+	lis, err := net.Listen("tcp", ":"+cf.Port)
 	if err != nil {
 		return err
 	}

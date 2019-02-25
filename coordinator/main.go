@@ -11,10 +11,10 @@ type Config struct {
 	Services       []string `required:"true"`
 }
 
-var c Config
+var cf Config
 
 func main() {
-	envconfig.MustProcess("coor", &c)
+	envconfig.MustProcess("coor", &cf)
 	app := cli.NewApp()
 	app.Commands = []cli.Command{
 		{Name: "daemon", Usage: "run server", Action: daemon},
