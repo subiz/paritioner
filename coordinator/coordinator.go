@@ -98,10 +98,6 @@ func (me *Coor) Join(req *pb.WorkerRequest) error {
 		return err
 	}
 
-	err = me.db.SaveHost(me.config.Cluster, req.Id, req.Host)
-	if err != nil {
-		return err
-	}
 	// ignore if already
 	_, found := me.config.Workers[req.Id]
 	if found {

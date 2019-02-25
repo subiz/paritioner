@@ -13,7 +13,6 @@ import (
 const (
 	keyspace = "partitioner"
 	tblConf  = "conf"
-	tblHost  = "host"
 )
 
 // DB allows the cluster to restore its state after crash by persisting the
@@ -29,7 +28,6 @@ const (
 //   };
 //
 //   CREATE TABLE partitioner.conf(cluster TEXT,conf BLOB,PRIMARY KEY(cluster));
-//   CREATE TABLE partitioner.host(cluster TEXT,id ASCII, host ASCII, PRIMARY KEY(cluster, id));
 type DB struct {
 	// hold connection to the database
 	session *gocql.Session
@@ -101,40 +99,4 @@ func (me *DB) Load(cluster string) (*pb.Configuration, error) {
 	}
 	conf.Cluster = cluster
 	return conf, nil
-}
-
-// SaveHost persists pair <worker ID and worker host> to the database.
-// After this, user can use LoadHosts to lookup host
-func (me *DB) SaveHost(cluster, id, host string) error {
-	err := me.session.Query("INSERT INTO "+tblHost+"(cluster, id, host) VALUES(?,?,?)",
-		cluster, id, host).Exec()
-	if err != nil {
-		return errors.Wrap(err, 500, errors.E_database_error)
-	}
-	return nil
-}
-
-// RemoveHost deletes worker's host by it's ID
-func (me *DB) RemoveHost(cluster, id string) error {
-	err := me.session.Query("DELETE FROM "+tblHost+" WHERE cluster=? AND id=?",
-		cluster, id).Exec()
-	if err != nil {
-		return errors.Wrap(err, 500, errors.E_database_error)
-	}
-	return nil
-}
-
-// LoadHosts lookups all worker hosts and IDs by cluster name
-func (me *DB) LoadHosts(cluster string) (map[string]string, error) {
-	hosts := make(map[string]string)
-	iter := me.session.Query("SELECT id,host FROM "+tblHost+" WHERE cluster=?",
-		cluster).Iter()
-	id, host := "", ""
-	for iter.Scan(&id, &host) {
-		hosts[id] = host
-	}
-	if err := iter.Close(); err != nil {
-		return nil, errors.Wrap(err, 500, errors.E_database_error, cluster, id)
-	}
-	return hosts, nil
 }
