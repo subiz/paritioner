@@ -38,6 +38,53 @@ func TestJoin(t *testing.T) {
 	}
 }
 
+func TestWrongTerm(t *testing.T) {
+	var cluster = "cluster1"
+	db := NewDBMock()
+	wc := NewWCMock()
+	coor := NewCoordinator(cluster, db, wc)
+
+	wc.RegisterWorker("worker1", func(conf *pb.Configuration) error {
+		return nil
+	})
+	wc.RegisterWorker("worker2", func(conf *pb.Configuration) error {
+		return nil
+	})
+	var err error
+	err = coor.Join(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    0,
+		Cluster: cluster,
+		Id:      "worker1",
+		Host:    "worker1:8080",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = coor.Join(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    0,
+		Cluster: cluster,
+		Id:      "worker2",
+		Host:    "worker2:8080",
+	})
+	if err == nil {
+		t.Fatal("should be wrong term")
+	}
+
+	err = coor.Leave(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    0,
+		Cluster: cluster,
+		Id:      "worker2",
+		Host:    "worker2:8080",
+	})
+	if err == nil {
+		t.Fatal("should be wrong term")
+	}
+}
+
 func TestLeave(t *testing.T) {
 	var cluster = "cluster1"
 	db := NewDBMock()
