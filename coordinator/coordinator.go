@@ -109,7 +109,7 @@ func (me *Coor) Leave(req *pb.WorkerRequest) error {
 
 	newConfig := proto.Clone(me.config).(*pb.Configuration)
 	newConfig.Workers = newWorkers
-	return me.transition(newConfig, newWorkerIds)
+	return me.transition(newConfig, newWorkerIds, "")
 }
 
 // Join is called by a worker to tell coordinator that it want to be a
@@ -158,7 +158,7 @@ func (me *Coor) Join(req *pb.WorkerRequest) error {
 
 	newConfig := proto.Clone(me.config).(*pb.Configuration)
 	newConfig.Workers = newWorkers
-	return me.transition(newConfig, newWorkerIds)
+	return me.transition(newConfig, newWorkerIds, req.Id)
 }
 
 // validateRequest make sures that version, cluster and term of the request
@@ -190,7 +190,8 @@ func (me *Coor) GetConfig() *pb.Configuration {
 	return me.config
 }
 
-func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error {
+// TODO: should remove newWorkers param since newConf already has it
+func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string, noVoter string) error {
 	// ignore no change
 	newb, _ := proto.Marshal(newConf)
 	oldb, _ := proto.Marshal(me.config)
@@ -206,8 +207,24 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error
 		return err
 	}
 
+	requiredVotes := len(newWorkers)
+	if noVoter != "" && requiredVotes > 0 {
+		requiredVotes--
+	}
+	if requiredVotes == 0 {
+		println("EARLY sucess")
+		if err := me.db.Store(newConf); err != nil {
+			return err
+		}
+		me.config = newConf
+		return nil
+	}
+
 	responseC := make(chan error)
 	for _, id := range newWorkers {
+		if id == noVoter {
+			continue
+		}
 		go func(id string) {
 			err := me.workerComm.Prepare(me.config.Cluster, id, newConf)
 			select {
@@ -226,7 +243,7 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error
 				return errors.Wrap(err, 500, errors.E_error_from_partition_peer)
 			}
 			numVotes++
-			if numVotes == len(newWorkers) { // successed
+			if numVotes == requiredVotes { // successed
 				// fmt.Printf("SUCCESS %v\n", newPars)
 				if err := me.db.Store(newConf); err != nil {
 					return err

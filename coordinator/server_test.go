@@ -52,19 +52,26 @@ func badWorker(host, cluster, workerid string) {
 	if err != nil {
 		panic(err)
 	}
+	conf, err := client.GetConfig(context.Background(), &pb.GetConfigRequest{
+		Version: VERSION,
+		Cluster: cluster,
+	})
+	if err != nil {
+		panic(err)
+	}
 	stream, err := client.Rebalance(context.Background(), &pb.WorkerRequest{
 		Version: VERSION,
 		Cluster: cluster,
 		Id:      workerid,
 		Host:    workerid + ":1234",
-		Term:    0,
+		Term:    conf.Term,
 	})
 
 	if err != nil {
 		panic(err)
 	}
 
-	conf, err := stream.Recv()
+	conf, err = stream.Recv()
 	if err != nil {
 		panic(err)
 	}
@@ -91,6 +98,7 @@ func goodWorker(host, cluster, workerid string, confchan chan *pb.Configuration)
 	if err != nil {
 		panic(err)
 	}
+
 	stream, err := client.Rebalance(context.Background(), &pb.WorkerRequest{
 		Version: VERSION,
 		Cluster: cluster,
