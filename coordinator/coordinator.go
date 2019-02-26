@@ -9,10 +9,15 @@ import (
 	"time"
 )
 
+type IDB interface {
+	Store(conf *pb.Configuration) error
+	Load(cluster string) (*pb.Configuration, error)
+}
+
 // Coor is a coordinator implementation
 type Coor struct {
 	*sync.Mutex
-	db         *DB
+	db         IDB
 	config     *pb.Configuration // intermediate configuration, TODO: this never be nil
 	workerComm WorkerComm
 	//	hosts      map[string]string
@@ -23,7 +28,7 @@ type WorkerComm interface {
 	Prepare(cluster, workerid string, conf *pb.Configuration) error
 }
 
-func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
+func NewCoordinator(cluster string, db IDB, workerComm WorkerComm) *Coor {
 	me := &Coor{Mutex: &sync.Mutex{}}
 	me.workerComm = workerComm
 	me.db = db
@@ -36,7 +41,7 @@ func NewCoordinator(cluster string, db *DB, workerComm WorkerComm) *Coor {
 	// init config
 	if conf.GetCluster() == "" || conf.GetTotalPartitions() == 0 {
 		me.config = &pb.Configuration{
-			Version:         "1.0.0",
+			Version:         VERSION,
 			Cluster:         cluster,
 			Term:            0,
 			NextTerm:        1,
@@ -92,7 +97,6 @@ func (me *Coor) Leave(req *pb.WorkerRequest) error {
 func (me *Coor) Join(req *pb.WorkerRequest) error {
 	me.Lock()
 	defer me.Unlock()
-
 	err := me.validateRequest(req.Version, req.Cluster, req.Term)
 	if err != nil {
 		return err
@@ -155,9 +159,6 @@ func (me *Coor) GetConfig() *pb.Configuration {
 }
 
 func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error {
-	me.Lock()
-	defer me.Unlock()
-
 	// ignore no change
 	newb, _ := proto.Marshal(newConf)
 	oldb, _ := proto.Marshal(me.config)
@@ -206,3 +207,5 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string) error
 		}
 	}
 }
+
+const VERSION = "1.0.0"
