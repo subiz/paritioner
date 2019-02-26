@@ -104,9 +104,12 @@ func (me *Server) Rebalance(w *pb.WorkerRequest, stream pb.Coordinator_Rebalance
 		return errors.New(400, errors.E_unknown, "cluster not found", w.GetCluster())
 	}
 
+	fmt.Println("BEFORE JOIN")
 	if err := server.coor.Join(w); err != nil {
+		fmt.Println("JOIN FAIL", err, w.Id)
 		return err
 	}
+	fmt.Println("JOIN OK")
 
 	server.streamMgr.Pull(w.GetId(), stream)
 	return nil
