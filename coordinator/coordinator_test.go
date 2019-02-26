@@ -38,7 +38,65 @@ func TestJoin(t *testing.T) {
 	}
 }
 
+func TestLeave(t *testing.T) {
+	var cluster = "cluster1"
+	db := NewDBMock()
+	wc := NewWCMock()
+	coor := NewCoordinator(cluster, db, wc)
+
+	wc.RegisterWorker("worker1", func(conf *pb.Configuration) error {
+		return nil
+	})
+	wc.RegisterWorker("worker2", func(conf *pb.Configuration) error {
+		return nil
+	})
+	var err error
+	err = coor.Join(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    0,
+		Cluster: cluster,
+		Id:      "worker1",
+		Host:    "worker1:8080",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := coor.GetConfig()
+	err = coor.Join(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    conf.GetTerm(),
+		Cluster: cluster,
+		Id:      "worker2",
+		Host:    "worker2:8080",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf = coor.GetConfig()
+	err = coor.Leave(&pb.WorkerRequest{
+		Version: VERSION,
+		Term:    conf.GetTerm(),
+		Cluster: cluster,
+		Id:      "worker2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf = coor.GetConfig()
+	if conf.GetTerm() != 3 && conf.GetNextTerm() != 4 {
+		t.Errorf("wrong term")
+	}
+	if len(conf.Workers) != 1 && conf.Workers["worker1"] == nil {
+		t.Errorf("wrong worker")
+	}
+}
+
 func TestBlockingWhileJoin(t *testing.T) {
+	// while in the middle of transaction (joining) any request to GetConfig
+	// should be blocked
 	var cluster = "cluster1"
 	db := NewDBMock()
 	wc := NewWCMock()
