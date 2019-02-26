@@ -10,17 +10,25 @@ import (
 )
 
 type IDB interface {
+	// Store persists configuration to a persistent storage
 	Store(conf *pb.Configuration) error
+
+	// Load retrives configuration for cluster from a persistent storage
 	Load(cluster string) (*pb.Configuration, error)
 }
 
 // Coor is a coordinator implementation
 type Coor struct {
 	*sync.Mutex
-	db         IDB
-	config     *pb.Configuration // intermediate configuration, TODO: this never be nil
+
+	// used to save (load) configuration to (from) a database
+	db IDB
+
+	// hold the intermediate state of the cluster
+	config *pb.Configuration
+
+	// used to communicate with workers
 	workerComm WorkerComm
-	//	hosts      map[string]string
 }
 
 // Workers communator, used to send signal (message) to workers
@@ -28,6 +36,7 @@ type WorkerComm interface {
 	Prepare(cluster, workerid string, conf *pb.Configuration) error
 }
 
+// NewCoordinator creates a new coordinator
 func NewCoordinator(cluster string, db IDB, workerComm WorkerComm) *Coor {
 	me := &Coor{Mutex: &sync.Mutex{}}
 	me.workerComm = workerComm
@@ -55,6 +64,15 @@ func NewCoordinator(cluster string, db IDB, workerComm WorkerComm) *Coor {
 	return me
 }
 
+// Leave is called by a worker to tell coordinator that its no longer want
+// to be a member of the cluster.
+// This function causes a transition, so its may block if coordinator is
+// in middle of another transition.
+// Coordinator before accept the request must notify all old workers and
+// waiting for theirs votes. If there is a workers that doesn't give its vote
+// on time, coordinator must deny the request.
+// If coordinator accepts the request, it must redistribute all partitions
+// handled by the leaving worker to its remainding workers.
 func (me *Coor) Leave(req *pb.WorkerRequest) error {
 	me.Lock()
 	defer me.Unlock()
@@ -94,6 +112,15 @@ func (me *Coor) Leave(req *pb.WorkerRequest) error {
 	return me.transition(newConfig, newWorkerIds)
 }
 
+// Join is called by a worker to tell coordinator that it want to be a
+// member of the cluster.
+// This function causes a transition, so its may block if coordinator is
+// in middle of another transition.
+// Coordinator before accept the request must notify all old workers and
+// waiting for theirs votes. If there is a workers that doesn't give its vote
+// on time, coordinator must deny the request.
+// If coordinator accepts the request, it must redistribute the partitions
+// evenly across all its workers
 func (me *Coor) Join(req *pb.WorkerRequest) error {
 	me.Lock()
 	defer me.Unlock()
@@ -134,6 +161,9 @@ func (me *Coor) Join(req *pb.WorkerRequest) error {
 	return me.transition(newConfig, newWorkerIds)
 }
 
+// validateRequest make sures that version, cluster and term of the request
+// match the coordinator. So we know that the request is compatible, upto data
+// and in the right place
 func (me *Coor) validateRequest(version, cluster string, term int32) error {
 	if version != me.config.Version {
 		return errors.New(400, errors.E_invalid_partition_version,
@@ -152,6 +182,8 @@ func (me *Coor) validateRequest(version, cluster string, term int32) error {
 	return nil
 }
 
+// GetConfig returns the current configuration of the coordinator
+// This function block while the coordinator in middle of a transition
 func (me *Coor) GetConfig() *pb.Configuration {
 	me.Lock()
 	defer me.Unlock()
