@@ -1,11 +1,11 @@
 package main
 
 import (
-//	"encoding/json"
-		"github.com/subiz/errors"
+	//	"encoding/json"
+	"github.com/subiz/errors"
 	pb "github.com/subiz/partitioner/header"
 	"testing"
-//	"time"
+	"time"
 )
 
 func TestJoin(t *testing.T) {
@@ -35,6 +35,42 @@ func TestJoin(t *testing.T) {
 	}
 	if len(conf.Workers) != 1 && conf.Workers["worker1"] == nil {
 		t.Errorf("wrong worker")
+	}
+}
+
+func TestBlockingWhileJoin(t *testing.T) {
+	var cluster = "cluster1"
+	db := NewDBMock()
+	wc := NewWCMock()
+	coor := NewCoordinator(cluster, db, wc)
+
+	c := make(chan bool, 1)
+	wc.RegisterWorker("worker1", func(conf *pb.Configuration) error {
+		c <- true
+		time.Sleep(1 * time.Second)
+		c <- true
+		return errors.New(400, errors.E_error_from_partition_peer)
+	})
+	var err error
+
+	go func() {
+		err = coor.Join(&pb.WorkerRequest{
+			Version: VERSION,
+			Term:    0,
+			Cluster: cluster,
+			Id:      "worker1",
+			Host:    "worker1:8080",
+		})
+		if err == nil {
+			t.Fatal("shoule be error, got nil")
+		}
+	}()
+	<-c
+	coor.GetConfig()
+	select {
+	case <-c:
+	default:
+		t.Error("should wait")
 	}
 }
 
@@ -86,7 +122,7 @@ type WCMock struct {
 
 func NewWCMock() *WCMock {
 	return &WCMock{
-		workers:make(map[string]func(*pb.Configuration) error),
+		workers: make(map[string]func(*pb.Configuration) error),
 	}
 }
 
