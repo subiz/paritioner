@@ -47,7 +47,7 @@ message Empty {}
 service Coordinator {
 	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
 	rpc Leave(LeaveRequest) returns (Empty) {}
-	rpc Join(JoinRequest) returns (Empty) {}
+	rpc Join(JoinRequest) returns (Configuration) {}
 }
 
 service Worker {
