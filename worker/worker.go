@@ -43,7 +43,6 @@ type Worker struct {
 	config         *pb.Configuration
 	coor           pb.CoordinatorClient
 	host           string
-	onUpdates      []func([]int32)
 	conn           map[string]*grpc.ClientConn
 	dialMutex      *sync.Mutex
 }
@@ -83,18 +82,6 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 
 	me.fetchConfig()
 	return me
-}
-
-// safe wraps f in side a func to prevent panicking
-func safe(f func()) {
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println(errors.New(500, errors.E_unknown).Error())
-			}
-		}()
-		f()
-	}()
 }
 
 // fetchConfig updates worker partition map to the current configuration of
@@ -144,36 +131,6 @@ func (me *Worker) fetchConfig() {
 	}
 }
 
-// OnUpdate registers a subscriber to workers.
-// The subscriber get call synchronously when worker's partitions is changed
-// worker will pass list of its new partitions through subscriber parameter
-func (me *Worker) OnUpdate(f func([]int32)) {
-	me.Lock()
-	defer me.Unlock()
-	me.onUpdates = append(me.onUpdates, f)
-}
-
-// notifySubscriber calls subscribed functions to notify them that worker's
-// partitions has changed. This must done synchronously since order of
-// changes might be critical to some subscribers.
-func (me *Worker) notifySubscribers() {
-	ourpars := make([]int32, 0)
-	for p, par := range me.partitions {
-		if par.worker_id == me.id {
-			ourpars = append(ourpars, int32(p))
-		}
-	}
-	wg := &sync.WaitGroup{}
-	wg.Add(len(me.onUpdates))
-	for _, f := range me.onUpdates {
-		safe(func() {
-			defer wg.Done()
-			f(ourpars)
-		})
-	}
-	wg.Wait()
-}
-
 // validateRequest makes sure version, cluster and term are upto date and
 //   is sent to correct cluster
 func (me *Worker) validateRequest(version, cluster string, term int32) error {
@@ -204,10 +161,7 @@ func (me *Worker) Notify(ctx context.Context, conf *pb.Configuration) (*pb.Empty
 		return nil, err
 	}
 	me.block(conf.Workers)
-	go func() {
-		me.fetchConfig()
-		me.notifySubscribers()
-	}()
+	go me.fetchConfig()
 	return &pb.Empty{}, nil
 }
 
