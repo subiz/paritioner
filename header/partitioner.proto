@@ -17,6 +17,7 @@ message WorkerInfo {
 	string id = 5;
 	repeated int32 partitions = 7;
 	string host = 8;
+	string notify_host = 9;
 }
 
 message GetConfigRequest {
@@ -25,24 +26,32 @@ message GetConfigRequest {
 	string cluster = 4;
 }
 
-message WorkerRequest {
+message LeaveRequest {
+	string version = 2;
+	int32 term = 3;
+	string cluster = 4;
+	string id = 5;
+}
+
+message JoinRequest {
 	string version = 2;
 	int32 term = 3;
 	string cluster = 4;
 	string id = 5;
 	string host = 6;
+	string notify_host = 7;
 }
 
 message Empty {}
 
 service Coordinator {
 	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
-	rpc Leave(WorkerRequest) returns (Empty) {}
-	rpc Rebalance(WorkerRequest) returns (stream Configuration) {} // pull rebalance
-	rpc Accept(WorkerRequest) returns (Empty) {}
+	rpc Leave(LeaveRequest) returns (Empty) {}
+	rpc Join(JoinRequest) returns (Empty) {}
 }
 
 service Worker {
+	rpc Notify(Configuration) returns (Empty) {}
 	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
 }
 

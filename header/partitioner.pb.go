@@ -39,7 +39,7 @@ func (m *Configuration) Reset()         { *m = Configuration{} }
 func (m *Configuration) String() string { return proto.CompactTextString(m) }
 func (*Configuration) ProtoMessage()    {}
 func (*Configuration) Descriptor() ([]byte, []int) {
-	return fileDescriptor_partitioner_ea908fa8b89650e1, []int{0}
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{0}
 }
 func (m *Configuration) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Configuration.Unmarshal(m, b)
@@ -105,6 +105,7 @@ type WorkerInfo struct {
 	Id                   string   `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
 	Partitions           []int32  `protobuf:"varint,7,rep,packed,name=partitions,proto3" json:"partitions,omitempty"`
 	Host                 string   `protobuf:"bytes,8,opt,name=host,proto3" json:"host,omitempty"`
+	NotifyHost           string   `protobuf:"bytes,9,opt,name=notify_host,json=notifyHost,proto3" json:"notify_host,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -114,7 +115,7 @@ func (m *WorkerInfo) Reset()         { *m = WorkerInfo{} }
 func (m *WorkerInfo) String() string { return proto.CompactTextString(m) }
 func (*WorkerInfo) ProtoMessage()    {}
 func (*WorkerInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_partitioner_ea908fa8b89650e1, []int{1}
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{1}
 }
 func (m *WorkerInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WorkerInfo.Unmarshal(m, b)
@@ -155,6 +156,13 @@ func (m *WorkerInfo) GetHost() string {
 	return ""
 }
 
+func (m *WorkerInfo) GetNotifyHost() string {
+	if m != nil {
+		return m.NotifyHost
+	}
+	return ""
+}
+
 type GetConfigRequest struct {
 	Version              string   `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Term                 int32    `protobuf:"varint,3,opt,name=term,proto3" json:"term,omitempty"`
@@ -168,7 +176,7 @@ func (m *GetConfigRequest) Reset()         { *m = GetConfigRequest{} }
 func (m *GetConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*GetConfigRequest) ProtoMessage()    {}
 func (*GetConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_partitioner_ea908fa8b89650e1, []int{2}
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{2}
 }
 func (m *GetConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetConfigRequest.Unmarshal(m, b)
@@ -209,72 +217,142 @@ func (m *GetConfigRequest) GetCluster() string {
 	return ""
 }
 
-type WorkerRequest struct {
+type LeaveRequest struct {
 	Version              string   `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Term                 int32    `protobuf:"varint,3,opt,name=term,proto3" json:"term,omitempty"`
 	Cluster              string   `protobuf:"bytes,4,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	Id                   string   `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
-	Host                 string   `protobuf:"bytes,6,opt,name=host,proto3" json:"host,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *WorkerRequest) Reset()         { *m = WorkerRequest{} }
-func (m *WorkerRequest) String() string { return proto.CompactTextString(m) }
-func (*WorkerRequest) ProtoMessage()    {}
-func (*WorkerRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_partitioner_ea908fa8b89650e1, []int{3}
+func (m *LeaveRequest) Reset()         { *m = LeaveRequest{} }
+func (m *LeaveRequest) String() string { return proto.CompactTextString(m) }
+func (*LeaveRequest) ProtoMessage()    {}
+func (*LeaveRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{3}
 }
-func (m *WorkerRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_WorkerRequest.Unmarshal(m, b)
+func (m *LeaveRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_LeaveRequest.Unmarshal(m, b)
 }
-func (m *WorkerRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_WorkerRequest.Marshal(b, m, deterministic)
+func (m *LeaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_LeaveRequest.Marshal(b, m, deterministic)
 }
-func (dst *WorkerRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_WorkerRequest.Merge(dst, src)
+func (dst *LeaveRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LeaveRequest.Merge(dst, src)
 }
-func (m *WorkerRequest) XXX_Size() int {
-	return xxx_messageInfo_WorkerRequest.Size(m)
+func (m *LeaveRequest) XXX_Size() int {
+	return xxx_messageInfo_LeaveRequest.Size(m)
 }
-func (m *WorkerRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_WorkerRequest.DiscardUnknown(m)
+func (m *LeaveRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_LeaveRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_WorkerRequest proto.InternalMessageInfo
+var xxx_messageInfo_LeaveRequest proto.InternalMessageInfo
 
-func (m *WorkerRequest) GetVersion() string {
+func (m *LeaveRequest) GetVersion() string {
 	if m != nil {
 		return m.Version
 	}
 	return ""
 }
 
-func (m *WorkerRequest) GetTerm() int32 {
+func (m *LeaveRequest) GetTerm() int32 {
 	if m != nil {
 		return m.Term
 	}
 	return 0
 }
 
-func (m *WorkerRequest) GetCluster() string {
+func (m *LeaveRequest) GetCluster() string {
 	if m != nil {
 		return m.Cluster
 	}
 	return ""
 }
 
-func (m *WorkerRequest) GetId() string {
+func (m *LeaveRequest) GetId() string {
 	if m != nil {
 		return m.Id
 	}
 	return ""
 }
 
-func (m *WorkerRequest) GetHost() string {
+type JoinRequest struct {
+	Version              string   `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Term                 int32    `protobuf:"varint,3,opt,name=term,proto3" json:"term,omitempty"`
+	Cluster              string   `protobuf:"bytes,4,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Id                   string   `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
+	Host                 string   `protobuf:"bytes,6,opt,name=host,proto3" json:"host,omitempty"`
+	NotifyHost           string   `protobuf:"bytes,7,opt,name=notify_host,json=notifyHost,proto3" json:"notify_host,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *JoinRequest) Reset()         { *m = JoinRequest{} }
+func (m *JoinRequest) String() string { return proto.CompactTextString(m) }
+func (*JoinRequest) ProtoMessage()    {}
+func (*JoinRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{4}
+}
+func (m *JoinRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_JoinRequest.Unmarshal(m, b)
+}
+func (m *JoinRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_JoinRequest.Marshal(b, m, deterministic)
+}
+func (dst *JoinRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_JoinRequest.Merge(dst, src)
+}
+func (m *JoinRequest) XXX_Size() int {
+	return xxx_messageInfo_JoinRequest.Size(m)
+}
+func (m *JoinRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_JoinRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_JoinRequest proto.InternalMessageInfo
+
+func (m *JoinRequest) GetVersion() string {
+	if m != nil {
+		return m.Version
+	}
+	return ""
+}
+
+func (m *JoinRequest) GetTerm() int32 {
+	if m != nil {
+		return m.Term
+	}
+	return 0
+}
+
+func (m *JoinRequest) GetCluster() string {
+	if m != nil {
+		return m.Cluster
+	}
+	return ""
+}
+
+func (m *JoinRequest) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *JoinRequest) GetHost() string {
 	if m != nil {
 		return m.Host
+	}
+	return ""
+}
+
+func (m *JoinRequest) GetNotifyHost() string {
+	if m != nil {
+		return m.NotifyHost
 	}
 	return ""
 }
@@ -289,7 +367,7 @@ func (m *Empty) Reset()         { *m = Empty{} }
 func (m *Empty) String() string { return proto.CompactTextString(m) }
 func (*Empty) ProtoMessage()    {}
 func (*Empty) Descriptor() ([]byte, []int) {
-	return fileDescriptor_partitioner_ea908fa8b89650e1, []int{4}
+	return fileDescriptor_partitioner_f10fee30da69b5dc, []int{5}
 }
 func (m *Empty) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Empty.Unmarshal(m, b)
@@ -314,7 +392,8 @@ func init() {
 	proto.RegisterMapType((map[string]*WorkerInfo)(nil), "header.Configuration.WorkersEntry")
 	proto.RegisterType((*WorkerInfo)(nil), "header.WorkerInfo")
 	proto.RegisterType((*GetConfigRequest)(nil), "header.GetConfigRequest")
-	proto.RegisterType((*WorkerRequest)(nil), "header.WorkerRequest")
+	proto.RegisterType((*LeaveRequest)(nil), "header.LeaveRequest")
+	proto.RegisterType((*JoinRequest)(nil), "header.JoinRequest")
 	proto.RegisterType((*Empty)(nil), "header.Empty")
 }
 
@@ -331,9 +410,8 @@ const _ = grpc.SupportPackageIsVersion4
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type CoordinatorClient interface {
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*Configuration, error)
-	Leave(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*Empty, error)
-	Rebalance(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (Coordinator_RebalanceClient, error)
-	Accept(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*Empty, error)
+	Leave(ctx context.Context, in *LeaveRequest, opts ...grpc.CallOption) (*Empty, error)
+	Join(ctx context.Context, in *JoinRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type coordinatorClient struct {
@@ -353,7 +431,7 @@ func (c *coordinatorClient) GetConfig(ctx context.Context, in *GetConfigRequest,
 	return out, nil
 }
 
-func (c *coordinatorClient) Leave(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *coordinatorClient) Leave(ctx context.Context, in *LeaveRequest, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, "/header.Coordinator/Leave", in, out, opts...)
 	if err != nil {
@@ -362,41 +440,9 @@ func (c *coordinatorClient) Leave(ctx context.Context, in *WorkerRequest, opts .
 	return out, nil
 }
 
-func (c *coordinatorClient) Rebalance(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (Coordinator_RebalanceClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Coordinator_serviceDesc.Streams[0], "/header.Coordinator/Rebalance", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &coordinatorRebalanceClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Coordinator_RebalanceClient interface {
-	Recv() (*Configuration, error)
-	grpc.ClientStream
-}
-
-type coordinatorRebalanceClient struct {
-	grpc.ClientStream
-}
-
-func (x *coordinatorRebalanceClient) Recv() (*Configuration, error) {
-	m := new(Configuration)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *coordinatorClient) Accept(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *coordinatorClient) Join(ctx context.Context, in *JoinRequest, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/header.Coordinator/Accept", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/header.Coordinator/Join", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -406,9 +452,8 @@ func (c *coordinatorClient) Accept(ctx context.Context, in *WorkerRequest, opts 
 // CoordinatorServer is the server API for Coordinator service.
 type CoordinatorServer interface {
 	GetConfig(context.Context, *GetConfigRequest) (*Configuration, error)
-	Leave(context.Context, *WorkerRequest) (*Empty, error)
-	Rebalance(*WorkerRequest, Coordinator_RebalanceServer) error
-	Accept(context.Context, *WorkerRequest) (*Empty, error)
+	Leave(context.Context, *LeaveRequest) (*Empty, error)
+	Join(context.Context, *JoinRequest) (*Empty, error)
 }
 
 func RegisterCoordinatorServer(s *grpc.Server, srv CoordinatorServer) {
@@ -434,7 +479,7 @@ func _Coordinator_GetConfig_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _Coordinator_Leave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WorkerRequest)
+	in := new(LeaveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -446,46 +491,25 @@ func _Coordinator_Leave_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/header.Coordinator/Leave",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CoordinatorServer).Leave(ctx, req.(*WorkerRequest))
+		return srv.(CoordinatorServer).Leave(ctx, req.(*LeaveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Coordinator_Rebalance_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WorkerRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(CoordinatorServer).Rebalance(m, &coordinatorRebalanceServer{stream})
-}
-
-type Coordinator_RebalanceServer interface {
-	Send(*Configuration) error
-	grpc.ServerStream
-}
-
-type coordinatorRebalanceServer struct {
-	grpc.ServerStream
-}
-
-func (x *coordinatorRebalanceServer) Send(m *Configuration) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Coordinator_Accept_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WorkerRequest)
+func _Coordinator_Join_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JoinRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CoordinatorServer).Accept(ctx, in)
+		return srv.(CoordinatorServer).Join(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/header.Coordinator/Accept",
+		FullMethod: "/header.Coordinator/Join",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CoordinatorServer).Accept(ctx, req.(*WorkerRequest))
+		return srv.(CoordinatorServer).Join(ctx, req.(*JoinRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -503,17 +527,11 @@ var _Coordinator_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Coordinator_Leave_Handler,
 		},
 		{
-			MethodName: "Accept",
-			Handler:    _Coordinator_Accept_Handler,
+			MethodName: "Join",
+			Handler:    _Coordinator_Join_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "Rebalance",
-			Handler:       _Coordinator_Rebalance_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "partitioner.proto",
 }
 
@@ -521,6 +539,7 @@ var _Coordinator_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type WorkerClient interface {
+	Notify(ctx context.Context, in *Configuration, opts ...grpc.CallOption) (*Empty, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*Configuration, error)
 }
 
@@ -530,6 +549,15 @@ type workerClient struct {
 
 func NewWorkerClient(cc *grpc.ClientConn) WorkerClient {
 	return &workerClient{cc}
+}
+
+func (c *workerClient) Notify(ctx context.Context, in *Configuration, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/header.Worker/Notify", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *workerClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*Configuration, error) {
@@ -543,11 +571,30 @@ func (c *workerClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts
 
 // WorkerServer is the server API for Worker service.
 type WorkerServer interface {
+	Notify(context.Context, *Configuration) (*Empty, error)
 	GetConfig(context.Context, *GetConfigRequest) (*Configuration, error)
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
 	s.RegisterService(&_Worker_serviceDesc, srv)
+}
+
+func _Worker_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Configuration)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).Notify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/header.Worker/Notify",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).Notify(ctx, req.(*Configuration))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -572,6 +619,10 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "header.Worker",
 	HandlerType: (*WorkerServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Notify",
+			Handler:    _Worker_Notify_Handler,
+		},
 		{
 			MethodName: "GetConfig",
 			Handler:    _Worker_GetConfig_Handler,
@@ -645,35 +696,37 @@ var _Hello_serviceDesc = grpc.ServiceDesc{
 	Metadata: "partitioner.proto",
 }
 
-func init() { proto.RegisterFile("partitioner.proto", fileDescriptor_partitioner_ea908fa8b89650e1) }
+func init() { proto.RegisterFile("partitioner.proto", fileDescriptor_partitioner_f10fee30da69b5dc) }
 
-var fileDescriptor_partitioner_ea908fa8b89650e1 = []byte{
-	// 429 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xac, 0x53, 0xd1, 0x6a, 0xd4, 0x40,
-	0x14, 0x6d, 0xb2, 0x4d, 0xd2, 0xdc, 0x75, 0x75, 0xbd, 0x50, 0x18, 0x2a, 0x48, 0xc9, 0xd3, 0xfa,
-	0x12, 0x4b, 0x7c, 0x50, 0x44, 0x45, 0x29, 0xc5, 0x0a, 0x22, 0x65, 0x10, 0x04, 0x5f, 0xca, 0x34,
-	0x7b, 0x6b, 0x43, 0xd3, 0x4c, 0x9c, 0x4c, 0x56, 0x17, 0xbf, 0xc9, 0x6f, 0xf3, 0x17, 0x4c, 0x66,
-	0x9c, 0x35, 0xd5, 0x2e, 0x08, 0xee, 0xdb, 0x99, 0x3b, 0xe7, 0xdc, 0x7b, 0xce, 0xdc, 0x04, 0xee,
-	0xd6, 0x42, 0xe9, 0x42, 0x17, 0xb2, 0x22, 0x95, 0xd6, 0x4a, 0x6a, 0x89, 0xe1, 0x05, 0x89, 0x39,
-	0xa9, 0xe4, 0xbb, 0x0f, 0x93, 0x43, 0x59, 0x9d, 0x17, 0x9f, 0x5a, 0x25, 0x7a, 0x06, 0x32, 0x88,
-	0x16, 0xa4, 0x9a, 0x0e, 0x32, 0x7f, 0xdf, 0x9b, 0xc5, 0xdc, 0x1d, 0x11, 0x61, 0x5b, 0x93, 0xba,
-	0x62, 0xa3, 0xae, 0x1c, 0x70, 0x83, 0x7b, 0x76, 0x5e, 0xb6, 0x4d, 0x87, 0xd9, 0xb6, 0x65, 0xff,
-	0x3a, 0xe2, 0x03, 0x98, 0x6a, 0xa9, 0x45, 0x79, 0xba, 0x1a, 0xde, 0xb0, 0xc0, 0x28, 0xef, 0x98,
-	0xfa, 0xc9, 0xaa, 0x8c, 0xf7, 0x20, 0xae, 0xe8, 0xab, 0x3e, 0x35, 0xdd, 0x43, 0xc3, 0xd9, 0xe9,
-	0x0b, 0xef, 0xfb, 0x09, 0xcf, 0x20, 0xfa, 0x22, 0xd5, 0x65, 0xe7, 0x81, 0x45, 0xfb, 0xa3, 0xd9,
-	0x38, 0x4b, 0x52, 0xeb, 0x3d, 0xbd, 0xe6, 0x3b, 0xfd, 0x60, 0x49, 0x47, 0x95, 0x56, 0x4b, 0xee,
-	0x24, 0x7b, 0xef, 0xe0, 0xd6, 0xf0, 0x02, 0xa7, 0x30, 0xba, 0xa4, 0x25, 0xf3, 0x8c, 0xd7, 0x1e,
-	0xe2, 0x0c, 0x82, 0x85, 0x28, 0x5b, 0x32, 0x69, 0xc7, 0x19, 0xba, 0xee, 0x56, 0xf6, 0xa6, 0x3a,
-	0x97, 0xdc, 0x12, 0x9e, 0xfa, 0x4f, 0xbc, 0xe4, 0x04, 0xe0, 0xf7, 0x05, 0xde, 0x06, 0xbf, 0x98,
-	0x9b, 0x54, 0x31, 0xef, 0x10, 0xde, 0x07, 0x18, 0xa4, 0xed, 0xed, 0x06, 0x7c, 0x50, 0xe9, 0x5f,
-	0xf0, 0x42, 0x36, 0x9a, 0xed, 0x18, 0x85, 0xc1, 0xc9, 0x47, 0x98, 0xbe, 0x26, 0x6d, 0xb3, 0x70,
-	0xfa, 0xdc, 0x52, 0xa3, 0x37, 0xb5, 0x83, 0xe4, 0x1b, 0x4c, 0xac, 0xdb, 0x0d, 0x37, 0xfe, 0x2b,
-	0xb8, 0x0b, 0x16, 0x0e, 0x82, 0x45, 0x10, 0x1c, 0x5d, 0xd5, 0x7a, 0x99, 0xfd, 0xf0, 0x60, 0x7c,
-	0x28, 0xa5, 0x9a, 0x17, 0x95, 0xd0, 0x52, 0xe1, 0x0b, 0x88, 0x57, 0x89, 0x91, 0xb9, 0xf7, 0xfe,
-	0xf3, 0x11, 0xf6, 0x76, 0x6f, 0xdc, 0x73, 0xb2, 0x85, 0x0f, 0x21, 0x78, 0x4b, 0x62, 0x41, 0xb8,
-	0x7b, 0x7d, 0x57, 0x4e, 0x38, 0x71, 0x65, 0x33, 0xbe, 0x13, 0x3c, 0x87, 0x98, 0xd3, 0x99, 0x28,
-	0x45, 0x95, 0xaf, 0x15, 0xad, 0x9b, 0x76, 0xe0, 0xe1, 0x01, 0x84, 0xaf, 0xf2, 0x9c, 0x6a, 0xfd,
-	0xaf, 0x03, 0xb3, 0x63, 0x08, 0x2d, 0xe3, 0x7f, 0xb3, 0x66, 0x2f, 0x21, 0x38, 0xa6, 0xb2, 0x94,
-	0xf8, 0xd8, 0x81, 0xf5, 0x4d, 0x6e, 0xf8, 0x74, 0x93, 0xad, 0xb3, 0xd0, 0xfc, 0xf0, 0x8f, 0x7e,
-	0x06, 0x00, 0x00, 0xff, 0xff, 0xa0, 0x06, 0x61, 0x25, 0x05, 0x04, 0x00, 0x00,
+var fileDescriptor_partitioner_f10fee30da69b5dc = []byte{
+	// 461 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xb4, 0x54, 0xdf, 0x6b, 0x13, 0x41,
+	0x10, 0x6e, 0x7e, 0xdc, 0x5d, 0x6f, 0xd2, 0x6a, 0x1c, 0x15, 0x96, 0x08, 0x5a, 0xf6, 0x29, 0x82,
+	0x1c, 0x72, 0x3e, 0x28, 0x22, 0x22, 0x94, 0x62, 0x15, 0x29, 0x72, 0x08, 0x82, 0x2f, 0xe1, 0x34,
+	0x1b, 0x7b, 0xf4, 0xba, 0x9b, 0x6e, 0x36, 0xd1, 0xf8, 0xa7, 0xf8, 0x2f, 0x88, 0xff, 0xa3, 0xbb,
+	0xb3, 0x6e, 0x3c, 0x9b, 0xf4, 0xc9, 0xf8, 0x36, 0xfb, 0xcd, 0x37, 0x33, 0xdf, 0x7c, 0xbb, 0x77,
+	0x70, 0x63, 0x5a, 0x6a, 0x53, 0x99, 0x4a, 0x49, 0xa1, 0xb3, 0xa9, 0x56, 0x46, 0x61, 0x7c, 0x2a,
+	0xca, 0xb1, 0xd0, 0xfc, 0x67, 0x1b, 0xf6, 0x0f, 0x95, 0x9c, 0x54, 0x9f, 0xe7, 0xba, 0x74, 0x0c,
+	0x64, 0x90, 0x2c, 0x84, 0x9e, 0xd9, 0x90, 0xb5, 0x0f, 0x5a, 0xc3, 0xb4, 0x08, 0x47, 0x44, 0xe8,
+	0x1a, 0xa1, 0xcf, 0x59, 0xc7, 0xc2, 0x51, 0x41, 0xb1, 0x63, 0x7f, 0xaa, 0xe7, 0x33, 0x1b, 0xb3,
+	0xae, 0x67, 0xff, 0x3e, 0xe2, 0x7d, 0xe8, 0x1b, 0x65, 0xca, 0x7a, 0xb4, 0x1a, 0x3e, 0x63, 0x11,
+	0x55, 0x5e, 0x27, 0xfc, 0xed, 0x0a, 0xc6, 0x3b, 0x90, 0x4a, 0xf1, 0xd5, 0x8c, 0xa8, 0x7b, 0x4c,
+	0x9c, 0x5d, 0x07, 0xbc, 0x73, 0x13, 0x9e, 0x41, 0xf2, 0x45, 0xe9, 0x33, 0xab, 0x81, 0x25, 0x07,
+	0x9d, 0x61, 0x2f, 0xe7, 0x99, 0xd7, 0x9e, 0xfd, 0xa5, 0x3b, 0x7b, 0xef, 0x49, 0x47, 0xd2, 0xe8,
+	0x65, 0x11, 0x4a, 0x06, 0x27, 0xb0, 0xd7, 0x4c, 0x60, 0x1f, 0x3a, 0x67, 0x62, 0xc9, 0x5a, 0xa4,
+	0xd5, 0x85, 0x38, 0x84, 0x68, 0x51, 0xd6, 0x73, 0x41, 0xdb, 0xf6, 0x72, 0x0c, 0xdd, 0x7d, 0xd9,
+	0x2b, 0x39, 0x51, 0x85, 0x27, 0x3c, 0x6d, 0x3f, 0x69, 0xf1, 0x0b, 0x80, 0x3f, 0x09, 0xbc, 0x06,
+	0xed, 0x6a, 0x4c, 0x5b, 0xa5, 0x85, 0x8d, 0xf0, 0x2e, 0x40, 0x63, 0x5b, 0x27, 0x37, 0x2a, 0x1a,
+	0x88, 0x73, 0xf0, 0x54, 0xcd, 0x0c, 0xdb, 0xa5, 0x0a, 0x8a, 0xf1, 0x1e, 0xf4, 0xa4, 0x32, 0xd5,
+	0x64, 0x39, 0xa2, 0x54, 0x4a, 0x29, 0xf0, 0xd0, 0xb1, 0x45, 0xf8, 0x07, 0xe8, 0xbf, 0x14, 0xc6,
+	0x2f, 0x5b, 0x88, 0x8b, 0xb9, 0xb0, 0x45, 0x5b, 0xba, 0x24, 0x3e, 0x81, 0xbd, 0x37, 0xa2, 0x5c,
+	0x88, 0x2d, 0xf7, 0xbd, 0x6c, 0x0c, 0xff, 0xde, 0x82, 0xde, 0x6b, 0x55, 0xc9, 0xff, 0x3c, 0x67,
+	0x65, 0x70, 0x7c, 0xb5, 0xc1, 0xc9, 0x9a, 0xc1, 0x09, 0x44, 0x47, 0xe7, 0x53, 0xb3, 0xcc, 0x7f,
+	0x58, 0x95, 0x87, 0x4a, 0xe9, 0x71, 0x25, 0x4b, 0xa3, 0x34, 0x3e, 0x87, 0x74, 0xe5, 0x3c, 0xb2,
+	0xf0, 0x30, 0x2e, 0x5f, 0xc6, 0xe0, 0xf6, 0xc6, 0x07, 0xc9, 0x77, 0x30, 0x83, 0x88, 0xdc, 0xc5,
+	0x5b, 0x81, 0xd1, 0x34, 0x7b, 0xb0, 0x1f, 0x50, 0x9a, 0x6e, 0xf9, 0x0f, 0xa0, 0xeb, 0x4c, 0xc2,
+	0x9b, 0x21, 0xd1, 0xb0, 0x6c, 0x8d, 0x9d, 0x7f, 0x83, 0xd8, 0x3f, 0x45, 0x7c, 0x08, 0xf1, 0x09,
+	0xad, 0x83, 0x9b, 0xa5, 0xac, 0x4f, 0xfa, 0xc7, 0xcd, 0xf2, 0x17, 0x10, 0x1d, 0x8b, 0xba, 0x56,
+	0xf8, 0x38, 0x04, 0x57, 0x37, 0xd9, 0xf0, 0x45, 0xf1, 0x9d, 0x8f, 0x31, 0xfd, 0x87, 0x1e, 0xfd,
+	0x0a, 0x00, 0x00, 0xff, 0xff, 0xc4, 0x70, 0xc9, 0x58, 0x9c, 0x04, 0x00, 0x00,
 }
