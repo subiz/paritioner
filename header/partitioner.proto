@@ -1,4 +1,5 @@
 syntax = "proto3";
+
 package header;
 
 message Configuration {
@@ -37,7 +38,6 @@ message Empty {}
 service Coordinator {
 	rpc GetConfig(GetConfigRequest) returns (Configuration) {}
 	rpc Leave(WorkerRequest) returns (Empty) {}
-	rpc Join(WorkerRequest) returns (Empty) {}
 	rpc Rebalance(WorkerRequest) returns (stream Configuration) {} // pull rebalance
 	rpc Accept(WorkerRequest) returns (Empty) {}
 }
