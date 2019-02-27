@@ -181,16 +181,16 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 		}
 	}()
 
-	conf, err := pclient.GetConfig(context.Background(), &pb.Cluster{})
+	conf, err := pclient.GetConfig(context.Background(), &pb.GetConfigRequest{})
 	if err != nil {
 		return nil, err
 	}
 
 	// convert configuration fetched from worker to partition map
 	partitions := make([]string, conf.GetTotalPartitions())
-	for workerid, pars := range conf.GetPartitions() {
-		for _, parNum := range pars.GetPartitions() {
-			partitions[parNum] = conf.GetHosts()[workerid]
+	for _, workerinfo := range conf.Workers {
+		for _, parNum := range workerinfo.GetPartitions() {
+			partitions[parNum] = workerinfo.Host
 		}
 	}
 	return partitions, nil
