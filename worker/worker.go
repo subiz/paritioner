@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"io"
 	"reflect"
 	"strings"
 	"sync"
@@ -83,7 +82,6 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 	}
 
 	me.fetchConfig()
-	go me.rebalancePull()
 	return me
 }
 
@@ -99,58 +97,6 @@ func safe(f func()) {
 	}()
 }
 
-func (me *Worker) rebalancePull() {
-	ctx := context.Background()
-	for { // replace to rebalance
-		safe(func() {
-			stream, err := me.coor.Rebalance(ctx, &pb.WorkerRequest{
-				Version: me.version,
-				Cluster: me.cluster,
-				Id:      me.id,
-				Host:    me.host,
-				Term:    me.config.Term,
-			})
-
-			if err != nil {
-				fmt.Printf("ERR while joining cluster %v. Retry in 2 secs\n", err)
-				time.Sleep(2 * time.Second)
-				return
-			}
-			for {
-				conf, err := stream.Recv()
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					fmt.Printf("\nERR #E4343A while rebalancing %v. Retry in 2 secs", err)
-					time.Sleep(2 * time.Second)
-					return
-				}
-
-				me.Lock()
-
-				err = me.validateRequest(conf.GetVersion(), conf.GetCluster(),
-					conf.GetTerm())
-				if err != nil {
-					fmt.Printf("\nERR #FD84DD maleform request %v", err)
-				} else {
-					me.block(conf.Workers)
-					me.coor.Accept(ctx, &pb.WorkerRequest{
-						Version: me.version,
-						Cluster: me.cluster,
-						Id:      me.id,
-						Term:    conf.Term,
-					})
-				}
-				me.fetchConfig()
-				me.notifySubscribers()
-				me.Unlock()
-			}
-		})
-	}
-}
-
 // fetchConfig updates worker partition map to the current configuration of
 // coordinator.
 // Note: this function may take up to ten of seconds to execute since the
@@ -164,7 +110,6 @@ func (me *Worker) fetchConfig() {
 	for {
 		conf, err := me.coor.GetConfig(ctx, &pb.GetConfigRequest{
 			Version: me.version,
-			Term:    me.config.Term,
 			Cluster: me.cluster,
 		})
 		if err != nil {
@@ -247,6 +192,23 @@ func (me *Worker) validateRequest(version, cluster string, term int32) error {
 			"term should be %d, not %d", me.config.GetTerm(), term)
 	}
 	return nil
+}
+
+// GetConfig is a GRPC handler, it returns current configuration of the cluster
+func (me *Worker) Notify(ctx context.Context, conf *pb.Configuration) (*pb.Empty, error) {
+	me.Lock()
+	defer me.Unlock()
+	// term -1 because coordinator are sending new term not the current one
+	err := me.validateRequest(conf.Version, conf.Cluster, conf.Term-1)
+	if err != nil {
+		return nil, err
+	}
+	me.block(conf.Workers)
+	go func() {
+		me.fetchConfig()
+		me.notifySubscribers()
+	}()
+	return &pb.Empty{}, nil
 }
 
 // GetConfig is a GRPC handler, it returns current configuration of the cluster
