@@ -33,7 +33,7 @@ type Coor struct {
 
 // Workers communator, used to send signal (message) to workers
 type WorkerComm interface {
-	Prepare(cluster, workerid string, conf *pb.Configuration) error
+	Prepare(host string, conf *pb.Configuration) error
 }
 
 // NewCoordinator creates a new coordinator
@@ -73,7 +73,7 @@ func NewCoordinator(cluster string, db IDB, workerComm WorkerComm) *Coor {
 // on time, coordinator must deny the request.
 // If coordinator accepts the request, it must redistribute all partitions
 // handled by the leaving worker to its remainding workers.
-func (me *Coor) Leave(req *pb.WorkerRequest) error {
+func (me *Coor) Leave(req *pb.LeaveRequest) error {
 	me.Lock()
 	defer me.Unlock()
 
@@ -81,6 +81,7 @@ func (me *Coor) Leave(req *pb.WorkerRequest) error {
 	if err != nil {
 		return err
 	}
+
 	// ignore if not in the cluster
 	_, found := me.config.Workers[req.Id]
 	if !found {
@@ -118,10 +119,11 @@ func (me *Coor) Leave(req *pb.WorkerRequest) error {
 // in middle of another transition.
 // Coordinator before accept the request must notify all old workers and
 // waiting for theirs votes. If there is a workers that doesn't give its vote
+// note that, coordinator dont notify the joining worker
 // on time, coordinator must deny the request.
 // If coordinator accepts the request, it must redistribute the partitions
 // evenly across all its workers
-func (me *Coor) Join(req *pb.WorkerRequest) error {
+func (me *Coor) Join(req *pb.JoinRequest) error {
 	me.Lock()
 	defer me.Unlock()
 	err := me.validateRequest(req.Version, req.Cluster, req.Term)
@@ -151,11 +153,14 @@ func (me *Coor) Join(req *pb.WorkerRequest) error {
 	for id, pars := range partitionMap {
 		newWorkers[id] = me.config.Workers[id]
 		if id == req.Id {
-			newWorkers[id] = &pb.WorkerInfo{Id: id, Host: req.Host}
+			newWorkers[id] = &pb.WorkerInfo{
+				Id: id,
+				Host: req.Host,
+				NotifyHost: req.NotifyHost,
+			}
 		}
 		newWorkers[id].Partitions = pars
 	}
-
 	newConfig := proto.Clone(me.config).(*pb.Configuration)
 	newConfig.Workers = newWorkers
 	return me.transition(newConfig, newWorkerIds, req.Id)
@@ -212,7 +217,6 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string, noVot
 		requiredVotes--
 	}
 	if requiredVotes == 0 {
-		println("EARLY sucess")
 		if err := me.db.Store(newConf); err != nil {
 			return err
 		}
@@ -226,14 +230,13 @@ func (me *Coor) transition(newConf *pb.Configuration, newWorkers []string, noVot
 			continue
 		}
 		go func(id string) {
-			err := me.workerComm.Prepare(me.config.Cluster, id, newConf)
+			err := me.workerComm.Prepare(newConf.Workers[id].NotifyHost, newConf)
 			select {
 			case responseC <- err:
 			default:
 			}
 		}(id)
 	}
-
 	ticker := time.NewTicker(40 * time.Second)
 	numVotes := 0
 	for {
