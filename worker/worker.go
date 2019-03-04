@@ -14,6 +14,7 @@ import (
 	pb "github.com/subiz/partitioner/header"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 	NORMAL  = 1
 
 	PartitionKey = "partitionkey"
+	VERSION      = "1.0.0"
 )
 
 // global hashing util, used to hash key to partition number
@@ -37,7 +39,6 @@ type Worker struct {
 	*sync.Mutex
 	id             string
 	partitions     []partition
-	version        string
 	cluster        string
 	preparing_term int32
 	config         *pb.Configuration
@@ -59,7 +60,6 @@ type Worker struct {
 func NewWorker(host, cluster, id, coordinator string) *Worker {
 	me := &Worker{
 		Mutex:     &sync.Mutex{},
-		version:   "1.0.0",
 		cluster:   cluster,
 		id:        id,
 		host:      host,
@@ -80,6 +80,35 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 		break
 	}
 
+	// joinning the cluster
+	for {
+		me.fetchConfig()
+		fmt.Println("[worker] JOINING...")
+		_, err := me.coor.Join(context.Background(), &pb.JoinRequest{
+			Version:    VERSION,
+			Cluster:    cluster,
+			Term:       me.config.Term,
+			Id:         id,
+			Host:       host,
+			NotifyHost: host,
+		})
+
+		if err != nil {
+			if grpcerr, ok := status.FromError(err); ok {
+				serr := errors.FromString(grpcerr.Message())
+
+				// invalid perm, just refetch
+				if serr.Code == errors.E_invalid_partition_term.String() {
+					continue
+				}
+			}
+
+			fmt.Printf("ERR 242SDJFDS while join %v. Retry in 2 secs\n", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
 	me.fetchConfig()
 	return me
 }
@@ -90,24 +119,22 @@ func NewWorker(host, cluster, id, coordinator string) *Worker {
 // cluster is in middle of rebalance process. During that time, coordinator
 // would be blocking any requests.
 func (me *Worker) fetchConfig() {
-	var conf *pb.Configuration
 	ctx := context.Background()
-	fmt.Println("FETCHING CONFIG...")
-
+	fmt.Println("[worker] FETCHING CONFIG...")
 	for {
 		conf, err := me.coor.GetConfig(ctx, &pb.GetConfigRequest{
-			Version: me.version,
+			Version: VERSION,
 			Cluster: me.cluster,
 		})
 		if err != nil {
-			fmt.Printf("ERR #234FOISDOUD config %v. Retry after 2 secs\n", err)
+			fmt.Printf("[worker] ERR #234FOISDOUD config %v. Retry after 2 secs\n", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		err = me.validateRequest(conf.GetVersion(), conf.GetCluster(), conf.GetTerm())
 		if err != nil {
-			fmt.Printf("ERR #234DD4FSDOUD OUTDATED %v. Retry after 2 secs\n", err)
+			fmt.Printf("[worker] ERR #234DD4FSDOUD OUTDATED %v. Retry after 2 secs\n", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -117,14 +144,14 @@ func (me *Worker) fetchConfig() {
 	}
 
 	b, _ := json.Marshal(me.config)
-	fmt.Println("FETCHED.", string(b))
+	fmt.Println("[worker] FETCHED.", string(b))
 	// rebuild partition map using coordinator's configuration
-	me.partitions = make([]partition, conf.GetTotalPartitions())
-	for workerid, pars := range conf.Workers {
-		for _, p := range pars.GetPartitions() {
+	me.partitions = make([]partition, me.config.GetTotalPartitions())
+	for workerid, worker := range me.config.Workers {
+		for _, p := range worker.GetPartitions() {
 			me.partitions[p] = partition{
 				worker_id:   workerid,
-				worker_host: conf.Workers[workerid].GetHost(),
+				worker_host: worker.GetHost(),
 				state:       NORMAL,
 			}
 		}
@@ -134,9 +161,9 @@ func (me *Worker) fetchConfig() {
 // validateRequest makes sure version, cluster and term are upto date and
 //   is sent to correct cluster
 func (me *Worker) validateRequest(version, cluster string, term int32) error {
-	if version != me.version {
+	if version != VERSION {
 		return errors.New(400, errors.E_invalid_partition_version,
-			"only support version "+me.version)
+			"only support version "+VERSION)
 	}
 
 	if cluster != me.cluster {
@@ -168,13 +195,11 @@ func (me *Worker) Notify(ctx context.Context, conf *pb.Configuration) (*pb.Empty
 // GetConfig is a GRPC handler, it returns current configuration of the cluster
 func (me *Worker) GetConfig(ctx context.Context, cluster *pb.GetConfigRequest) (*pb.Configuration, error) {
 	me.Lock()
-	for me.config != nil {
-		me.Unlock()
-		time.Sleep(1 * time.Second)
+	defer me.Unlock()
+	if me.config == nil {
+		return nil, errors.New(500, errors.E_internal_error, "uninitialized cluster")
 	}
-	config := me.config
-	me.Unlock()
-	return config, nil
+	return me.config, nil
 }
 
 // block blocks outdated partitions
@@ -225,6 +250,11 @@ func analysisReturnType(server interface{}) map[string]reflect.Type {
 func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 	returnedTypeM := analysisReturnType(mgr)
 	return func(ctx context.Context, in interface{}, sinfo *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
+		if sinfo.FullMethod == "/header.Worker/Notify" ||
+			sinfo.FullMethod == "/header.Worker/GetConfig" {
+			return handler(ctx, in)
+		}
+		println("[worker] aaa", sinfo.FullMethod)
 		md, _ := metadata.FromIncomingContext(ctx)
 		pkey := strings.Join(md[PartitionKey], "")
 
@@ -263,7 +293,6 @@ func (me *Worker) CreateIntercept(mgr interface{}) grpc.UnaryServerInterceptor {
 //   in: value of input (in request) parameter
 // this method returns output just like a normal GRPC call
 func (me *Worker) forward(host, method string, returnedType reflect.Type, ctx context.Context, in interface{}) (interface{}, error) {
-
 	// use cache host connection or create a new one
 	me.dialMutex.Lock()
 	cc, ok := me.conn[host]
