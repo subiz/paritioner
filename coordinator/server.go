@@ -1,11 +1,10 @@
-package main
+package coordinator
 
 import (
 	"context"
 	"fmt"
 	"github.com/subiz/errors"
 	pb "github.com/subiz/partitioner/header"
-	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 	"net"
 	"time"
@@ -50,12 +49,6 @@ func RunCoordinator(seeds, clusters []string, port, us, pw string) {
 	if err := grpcServer.Serve(lis); err != nil {
 		panic(err)
 	}
-}
-
-// daemon loads all clusters and start GRPC server
-func daemon(ctx *cli.Context) {
-	RunCoordinator(cf.CassandraSeeds, cf.Services, cf.Port, cf.CassandraUser,
-	cf.CassandraPass)
 }
 
 // makeChanId returns composited channel id, which unique for each worker
