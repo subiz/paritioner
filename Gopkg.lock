@@ -2,7 +2,20 @@
 
 
 [[projects]]
-  digest = "1:5d1b5a25486fc7d4e133646d834f6fca7ba1cef9903d40e7aa786c41b89e9e91"
+  branch = "master"
+  digest = "1:6e6e35d5fdd1b145f0da2b99a78d661f0bb326ac58846853fdea8e6758e8e3f6"
+  name = "github.com/gocql/gocql"
+  packages = [
+    ".",
+    "internal/lru",
+    "internal/murmur",
+    "internal/streams",
+  ]
+  pruneopts = "UT"
+  revision = "f6df8288f9b44e66f50c9a59aee53a705c788dbe"
+
+[[projects]]
+  digest = "1:64c2b533ffd17023738c534548ab2455d7f519bc15ed4225145425ed2222448b"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -13,8 +26,43 @@
     "ptypes/timestamp",
   ]
   pruneopts = "UT"
-  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
-  version = "v1.2.0"
+  revision = "c823c79ea1570fb5ff454033735a8e68575d1d0f"
+  version = "v1.3.0"
+
+[[projects]]
+  digest = "1:e4f5819333ac698d294fe04dbf640f84719658d5c7ce195b10060cc37292ce79"
+  name = "github.com/golang/snappy"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2a8bb927dd31d8daada140a5d09578521ce5c36a"
+  version = "v0.0.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:364b908b9b27b97ab838f2f6f1b1f46281fa29b978a037d72a9b1d4f6d940190"
+  name = "github.com/hailocab/go-hostpool"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e80d13ce29ede4452c43dea11e79b9bc8a15b478"
+
+[[projects]]
+  digest = "1:d15ee511aa0f56baacc1eb4c6b922fa1c03b38413b6be18166b996d82a0156ea"
+  name = "github.com/hashicorp/golang-lru"
+  packages = [
+    ".",
+    "simplelru",
+  ]
+  pruneopts = "UT"
+  revision = "7087cb70de9f7a8bc0a10c375cb0d2280a8edf9c"
+  version = "v0.5.1"
+
+[[projects]]
+  digest = "1:edbef42561faa44c19129b68d1e109fbc1647f63239250391eadc8d0e7c9f669"
+  name = "github.com/kelseyhightower/envconfig"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f611eb38b3875cc3bd991ca91c51d06446afa14c"
+  version = "v1.3.0"
 
 [[projects]]
   branch = "master"
@@ -37,18 +85,6 @@
   revision = "044cd33d84acb56032b7513b173931618c32d692"
 
 [[projects]]
-  branch = "master"
-  digest = "1:1e22d06a9535d7fd5d589e0440b1fcd7099a3d482d0908bada325759456c9ae5"
-  name = "github.com/subiz/partitioner"
-  packages = [
-    "client",
-    "header",
-    "worker",
-  ]
-  pruneopts = "UT"
-  revision = "e8e2380a401983895099387a8f3d2ab5720de065"
-
-[[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
   name = "github.com/urfave/cli"
   packages = ["."]
@@ -58,7 +94,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:fc7b6b4384e1e849d99eab58eca4f8c0a76bad4699117d5077a9a5c3c83e289e"
+  digest = "1:4512c74e2c934a151fa9246cdc565d29611f53295bfb05e7a6275e80ee540a0c"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -70,15 +106,15 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "3a22650c66bd7f4fb6d1e8072ffd7b75c8a27898"
+  revision = "16b79f2e4e95ea23b2bf9903c9809ff7b013ce85"
 
 [[projects]]
   branch = "master"
-  digest = "1:d0e9a312c4610a508569ab25e54d34600b1a96d19b1866ece104ffdf1c1b9d2c"
+  digest = "1:b95ef12b443f7b5a40ab69e3a02d113f5a7f2b67a32af76eb2fa7bebd52c9eb5"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "cd391775e71e684db52b63df9affd58269495083"
+  revision = "e844e0132e93db857c984c24fd4fc86815e43be3"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -109,10 +145,10 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "082222b4a5c572e33e82ee9162d1352c7cf38682"
+  revision = "4f5b463f9597cbe0dd13a6a2cd4f85e788d27508"
 
 [[projects]]
-  digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"
+  digest = "1:69d1b9652e6abdc1081ec7528bdd806fbfeb8bdc7a5686b59119e01a46ea5d78"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -150,20 +186,34 @@
     "tap",
   ]
   pruneopts = "UT"
-  revision = "a02b0774206b209466313a0b525d2c738fe407eb"
-  version = "v1.18.0"
+  revision = "2fdaae294f38ed9a121193c51ec99fecd3b13eb7"
+  version = "v1.19.0"
+
+[[projects]]
+  digest = "1:2d1fbdc6777e5408cabeb02bf336305e724b925ff4546ded0fa8715a7267922a"
+  name = "gopkg.in/inf.v0"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "d2d2541c53f18d2a059457998ce2876cc8e67cbf"
+  version = "v0.9.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/subiz/partitioner/client",
-    "github.com/subiz/partitioner/header",
-    "github.com/subiz/partitioner/worker",
+    "github.com/gocql/gocql",
+    "github.com/golang/protobuf/proto",
+    "github.com/hashicorp/golang-lru",
+    "github.com/kelseyhightower/envconfig",
+    "github.com/subiz/errors",
     "github.com/urfave/cli",
+    "golang.org/x/net/context",
     "google.golang.org/grpc",
+    "google.golang.org/grpc/balancer",
+    "google.golang.org/grpc/connectivity",
     "google.golang.org/grpc/metadata",
     "google.golang.org/grpc/reflection",
+    "google.golang.org/grpc/resolver",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
