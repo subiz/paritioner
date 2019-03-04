@@ -89,6 +89,14 @@ func (me *parBalancer) fetchLoop(addr string) {
 
 	// main loop
 	for {
+		println("FET")
+		me.Lock()
+		if me.subConns == nil {
+			me.Unlock()
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		me.Unlock()
 		pars, err := fetchPartitions(pclient)
 		if err != nil {
 			fmt.Printf("ERR#FS94GPOFD fetching partition: %v\n", err)
@@ -146,6 +154,7 @@ func (me *parBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 
 	// use first address only, the rest of cluster will be discover through
 	// this address
+	println("HNALE", addrs[0].Addr)
 	me.fetchLoop(addrs[0].Addr)
 }
 
@@ -209,6 +218,7 @@ func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
 
 // Update is called by balancer to updates picker's current partitions and subConns
 func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn) {
+	println("UPPPDDDDAAAAATTTTTEEE")
 	me.Lock()
 	defer me.Unlock()
 
@@ -236,6 +246,7 @@ func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn)
 // partition map is in-sync, clients are now sending requests directly to the
 // correct host without making any additional redirection.
 func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+	println("PPPPPIIIIII")
 	if len(me.subConns) <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
