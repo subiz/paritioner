@@ -9,6 +9,8 @@ type Config struct {
 	CassandraSeeds []string `required:"true"`
 	Port           string   `required:"true"`
 	Services       []string `required:"true"`
+	CassandraUser  string   `required:"true"`
+	CassandraPass  string   `required:"true"`
 }
 
 var cf Config

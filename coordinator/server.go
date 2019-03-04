@@ -28,8 +28,8 @@ type server struct {
 	cluster string
 }
 
-func RunCoordinator(seeds []string, clusters []string, port string) {
-	db := NewDB(seeds)
+func RunCoordinator(seeds, clusters []string, port, us, pw string) {
+	db := NewDB(seeds, us, pw)
 	bigServer := &Server{}
 	bigServer.serverMap = make(map[string]*server)
 	var err error
@@ -54,7 +54,8 @@ func RunCoordinator(seeds []string, clusters []string, port string) {
 
 // daemon loads all clusters and start GRPC server
 func daemon(ctx *cli.Context) {
-	RunCoordinator(cf.CassandraSeeds, cf.Services, cf.Port)
+	RunCoordinator(cf.CassandraSeeds, cf.Services, cf.Port, cf.CassandraUser,
+	cf.CassandraPass)
 }
 
 // makeChanId returns composited channel id, which unique for each worker

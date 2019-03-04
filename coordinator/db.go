@@ -35,9 +35,13 @@ type DB struct {
 // connect establish a new session to a Cassandra cluster, this function will
 // retry on error automatically, and blocking until a session successfully
 // established
-func connect(seeds []string, keyspace string) *gocql.Session {
+func connect(seeds []string, keyspace, us, pw string) *gocql.Session {
 	cluster := gocql.NewCluster(seeds...)
 	cluster.Timeout = 10 * time.Second
+	cluster.Authenticator = gocql.PasswordAuthenticator{
+		Username: us,
+		Password: pw,
+	}
 	cluster.Keyspace = keyspace
 	for {
 		session, err := cluster.CreateSession()
@@ -55,9 +59,9 @@ func connect(seeds []string, keyspace string) *gocql.Session {
 //     connect to the cluster then the rest of the ring will be automatically
 //     discovered.
 //   cluster: used to identify the cluster
-func NewDB(seeds []string) *DB {
+func NewDB(seeds []string, us, pw string) *DB {
 	me := &DB{}
-	me.session = connect(seeds, keyspace)
+	me.session = connect(seeds, keyspace, us, pw)
 	return me
 }
 
