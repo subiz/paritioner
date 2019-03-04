@@ -28,29 +28,33 @@ type server struct {
 	cluster string
 }
 
-// daemon loads all clusters and start GRPC server
-func daemon(ctx *cli.Context) error {
-	db := NewDB(cf.CassandraSeeds)
+func RunCoordinator(seeds []string, clusters []string, port string) {
+	db := NewDB(seeds)
 	bigServer := &Server{}
 	bigServer.serverMap = make(map[string]*server)
 	var err error
-	for _, service := range cf.Services {
-		s := &server{
-			cluster: service,
-			coor:    NewCoordinator(service, db, bigServer),
-		}
-		bigServer.serverMap[service] = s
+	for _, cluster := range clusters {
+		coordinator := NewCoordinator(cluster, db, bigServer)
+		s := &server{cluster: cluster, coor: coordinator}
+		bigServer.serverMap[cluster] = s
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterCoordinatorServer(grpcServer, bigServer)
 
-	lis, err := net.Listen("tcp", ":"+cf.Port)
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	return grpcServer.Serve(lis)
+	if err := grpcServer.Serve(lis); err != nil {
+		panic(err)
+	}
+}
+
+// daemon loads all clusters and start GRPC server
+func daemon(ctx *cli.Context) {
+	RunCoordinator(cf.CassandraSeeds, cf.Services, cf.Port)
 }
 
 // makeChanId returns composited channel id, which unique for each worker
