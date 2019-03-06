@@ -93,8 +93,7 @@ func (me *parBalancer) fetchLoop(addr string) {
 		me.Lock()
 		if me.subConns == nil {
 			me.Unlock()
-			time.Sleep(2 * time.Second)
-			continue
+			return
 		}
 		me.Unlock()
 		pars, err := fetchPartitions(pclient)
@@ -179,6 +178,7 @@ func (_ *parBalancer) Close() {}
 // {0, 1, 2}, partition 0 and 2 are handled by worker 0 at host worker-0:8081
 // partition 1 is handled by worker 1 at host worker-1:8081
 func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
+	println("CAAAAAAALLING")
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
