@@ -3,9 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
-	"math/rand"
-	"strconv"
 	"sync"
 	"time"
 
@@ -14,7 +11,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -36,7 +32,11 @@ type parBuilder struct{}
 // Build implements GRPC method Build in balancer.Builder
 func (me *parBuilder) Build(cc balancer.ClientConn,
 	opt balancer.BuildOptions) balancer.Balancer {
-	return &parBalancer{Mutex: &sync.Mutex{}, cc: cc, picker: NewParPicker()}
+	return &parBalancer{
+		Mutex:    &sync.Mutex{},
+		cc:       cc,
+		subConns: make(map[string]balancer.SubConn),
+	}
 }
 
 // Name implements GRPC method Name in balancer.Builder
@@ -49,8 +49,6 @@ type parBalancer struct {
 
 	// subConn for each host
 	subConns map[string]balancer.SubConn
-
-	picker balancer.Picker
 
 	// partition map
 	partitions []string
@@ -73,35 +71,16 @@ func (me *parBalancer) fetchLoop(addr string) {
 	me.Unlock()
 
 	// try to connect to a worker, retry automatically on error
-	// block until success
-	var pconn *grpc.ClientConn
-	for {
-		var err error
-		pconn, err = dialGrpc(addr)
-		if err != nil {
-			fmt.Printf("ERR LKJSDLFKJ49FD cannot connect to addr %s, %v\n", addr, err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		break
-	}
-	pclient := pb.NewWorkerClient(pconn)
+	pclient := pb.NewWorkerClient(dialGrpc(addr))
 
 	// main loop
 	for {
-		println("FET")
-		me.Lock()
-		if me.subConns == nil {
-			me.Unlock()
-			return
-		}
-		me.Unlock()
 		pars, err := fetchPartitions(pclient)
 		if err != nil {
 			fmt.Printf("ERR#FS94GPOFD fetching partition: %v\n", err)
 		}
 
-		// making array of hosts using partition map
+		// making array of unique hosts using partition map
 		hostM := make(map[string]bool, 0)
 		for _, host := range pars {
 			hostM[host] = true
@@ -111,6 +90,7 @@ func (me *parBalancer) fetchLoop(addr string) {
 			hosts = append(hosts, host)
 		}
 
+		fmt.Println("GOT HOSTS", hosts)
 		addrsSet := make(map[string]struct{})
 		for _, host := range hosts {
 			addrsSet[host] = struct{}{}
@@ -144,7 +124,6 @@ func (me *parBalancer) fetchLoop(addr string) {
 	}
 }
 
-// ignore since we dont rely in resolver addrs
 func (me *parBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	if err != nil {
 		fmt.Printf("ERR base.baseBalancer: HandleResolvedAddrs called with error %v", err)
@@ -154,7 +133,7 @@ func (me *parBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 	// use first address only, the rest of cluster will be discover through
 	// this address
 	println("HNALE", addrs[0].Addr)
-	me.fetchLoop(addrs[0].Addr)
+	go me.fetchLoop(addrs[0].Addr)
 }
 
 // also ignore since we have our own implementation
@@ -163,7 +142,9 @@ func (me *parBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 	if s == connectivity.Idle {
 		sc.Connect()
 	}
-	me.cc.UpdateBalancerState(connectivity.Ready, me.picker)
+
+	picker := NewParPicker(me.partitions, me.subConns)
+	me.cc.UpdateBalancerState(connectivity.Ready, picker)
 }
 
 // Close is a nop because base balancer doesn't have internal state to clean up,
@@ -171,14 +152,13 @@ func (me *parBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 func (_ *parBalancer) Close() {}
 
 // fetchPartitions calls worker api to return the latest partition map
-// Partition map is an array tells which worker will handle which partition
+// Partition map is an array shows which worker will handle which partition
 // partition number is ordinal index of array, each element contains worker
 // host
 // eg: ["worker-0:8081", "worker-1:8081", "worker-0:8081"] has 3 partitions:
 // {0, 1, 2}, partition 0 and 2 are handled by worker 0 at host worker-0:8081
 // partition 1 is handled by worker 1 at host worker-1:8081
 func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
-	println("CAAAAAAALLING")
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -191,10 +171,10 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 	}()
 
 	conf, err := pclient.GetConfig(context.Background(), &pb.GetConfigRequest{})
+
 	if err != nil {
 		return nil, err
 	}
-
 	// convert configuration fetched from worker to partition map
 	partitions := make([]string, conf.GetTotalPartitions())
 	for _, workerinfo := range conf.Workers {
@@ -205,77 +185,23 @@ func fetchPartitions(pclient pb.WorkerClient) (pars []string, err error) {
 	return partitions, nil
 }
 
-// parPicker is shorten for partition picker. Its used to pick the right host
-// for a GRPC request based on partition key
-type parPicker struct {
-	*sync.Mutex
-	partitions []string
-	subConns   map[string]balancer.SubConn
+// dialGRPC makes a connection to GRPC addr (e.g: grpc.subiz.com:8080)
+// Caution: this function retry automatically on error and block until success
+func dialGrpc(addr string) *grpc.ClientConn {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+	// Enabling WithBlock tells the client to not give up trying to find a server
+	opts = append(opts, grpc.WithBlock())
+	// However, we're still setting a timeout so that if the server takes too long, we still give up
+	opts = append(opts, grpc.WithTimeout(2*time.Second))
+
+	for {
+		pconn, err := grpc.Dial(addr, opts...)
+		if err != nil {
+			fmt.Printf("ERR LKJSDLFKJ49FD cannot connect to addr %s, %v\n", addr, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		return pconn
+	}
 }
-
-// NewParPicker creates a new parPicker object
-func NewParPicker() *parPicker { return &parPicker{Mutex: &sync.Mutex{}} }
-
-// Update is called by balancer to updates picker's current partitions and subConns
-func (me *parPicker) Update(pars []string, subConns map[string]balancer.SubConn) {
-	println("UPPPDDDDAAAAATTTTTEEE")
-	me.Lock()
-	defer me.Unlock()
-
-	// copy subConns
-	me.subConns = make(map[string]balancer.SubConn)
-	for host, sc := range subConns {
-		me.subConns[host] = sc
-	}
-
-	// copy partitions
-	me.partitions = make([]string, len(pars))
-	copy(me.partitions, pars)
-}
-
-// Pick is called before each GRPC request to determind wich subconn to send
-// the request to
-// We find worker host by hashing partition key to a partition number then
-// look it up in the current partition map
-// worker host might not be the correct one since partition map can be
-// unsynchronized (by network lantences or network partitioned). When it
-// happend, request will be redirected one or more times in worker side till
-// it arrive the correct host. This may look ineffiecient but we don't have to
-// guarrantee consistent at client-side, make client-side code so much simpler
-// when the  network is stable and no worker member changes (most of the time),
-// partition map is in-sync, clients are now sending requests directly to the
-// correct host without making any additional redirection.
-func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	println("PPPPPIIIIII")
-	if len(me.subConns) <= 0 {
-		return nil, nil, balancer.ErrNoSubConnAvailable
-	}
-
-	md, _ := metadata.FromOutgoingContext(ctx)
-	mdpar := md[PartitionKey]
-	var pkey string
-	if len(mdpar) > 0 {
-		pkey = mdpar[0]
-	}
-
-	if pkey == "" { // random host
-		pkey = strconv.Itoa(rand.Int())
-	}
-
-	me.Lock()
-	// hashing key to find the partition number
-	g_pickerhash.Write([]byte(pkey))
-	par := g_pickerhash.Sum32() % uint32(len(me.partitions))
-	g_pickerhash.Reset()
-	sc := me.subConns[me.partitions[par]]
-	me.Unlock()
-
-	if sc == nil {
-		return nil, nil, balancer.ErrNoSubConnAvailable
-	}
-	return sc, nil, nil
-}
-
-// global hashing util, used to hash key to partition number
-// must lock before use
-var g_pickerhash = fnv.New32a()
