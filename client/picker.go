@@ -20,7 +20,6 @@ type parPicker struct {
 // NewParPicker creates a new parPicker object
 func NewParPicker(pars []string, subConns map[string]balancer.SubConn) *parPicker {
 	me := &parPicker{}
-	println("UPPPDDDDAAAAATTTTTEEE")
 
 	// copy subConns
 	me.subConns = make(map[string]balancer.SubConn)
@@ -48,7 +47,6 @@ func NewParPicker(pars []string, subConns map[string]balancer.SubConn) *parPicke
 // correct host without making any additional redirection.
 func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if len(me.subConns) <= 0 {
-		println("PPPPPIIIIIIXXXXXXXXXXXXX", me.subConns)
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
 
@@ -68,8 +66,6 @@ func (me *parPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balan
 	par := g_pickerhash.Sum32() % uint32(len(me.partitions))
 	g_pickerhash.Reset()
 	sc := me.subConns[me.partitions[par]]
-
-	println("PPPPPIIIIII", pkey, par)
 
 	if sc == nil {
 		return nil, nil, balancer.ErrNoSubConnAvailable

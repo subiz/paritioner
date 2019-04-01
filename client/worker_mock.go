@@ -17,12 +17,11 @@ func (s *sampleWorker) Notify(_ context.Context, _ *pb.Configuration) (*pb.Empty
 }
 
 func (s *sampleWorker) GetConfig(_ context.Context, _ *pb.GetConfigRequest) (*pb.Configuration, error) {
-	println("CALLED getconfig")
+	println("[mock] CALLED getconfig")
 	return s.config, nil
 }
 
 func (s *sampleWorker) Hello(_ context.Context, _ *pb.GetConfigRequest) (*pb.WorkerInfo, error) {
-	println("CALLED hello")
 	return &pb.WorkerInfo{Id: s.id}, nil
 }
 
@@ -32,7 +31,7 @@ func RunWorker(port, id string, config *pb.Configuration) {
 		panic(err)
 	}
 
-	w := &sampleWorker{config: config}
+	w := &sampleWorker{config: config, id: id}
 	grpcserver := grpc.NewServer()
 	pb.RegisterWorkerServer(grpcserver, w)
 	pb.RegisterHelloServer(grpcserver, w)

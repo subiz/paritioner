@@ -1,11 +1,11 @@
 package client
 
 import (
-	"time"
 	"context"
 	pb "github.com/subiz/partitioner/header"
 	"google.golang.org/grpc"
 	"testing"
+	"time"
 )
 
 func createClient(workerhost string) pb.HelloClient {
@@ -29,12 +29,14 @@ func TestBalancer(t *testing.T) {
 		TotalPartitions: 10,
 		Workers: map[string]*pb.WorkerInfo{
 			"1": &pb.WorkerInfo{
+				Host:       "localhost:10001",
 				Id:         "1",
 				Partitions: []int32{0, 1, 2, 3, 4},
 			},
 			"2": &pb.WorkerInfo{
 				Id:         "2",
 				Partitions: []int32{5, 6, 7, 8, 9},
+				Host:       "localhost:10002",
 			},
 		},
 	}
@@ -42,10 +44,18 @@ func TestBalancer(t *testing.T) {
 	go RunWorker("10002", "2", conf)
 
 	client := createClient("localhost:10001")
-	out, err := client.Hello(context.Background(), &pb.GetConfigRequest{})
-	if err != nil {
-		t.Fatal(err)
+	w1c, w2c := 0, 0
+	for i := 0; i < 10000; i++ {
+		out, err := client.Hello(context.Background(), &pb.GetConfigRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out.Id == "1" {
+			w1c++
+		} else if out.Id == "2" {
+			w2c++
+		}
 	}
 
-	println("OUT", out.Id)
+	println("OUT", w1c, w2c)
 }
